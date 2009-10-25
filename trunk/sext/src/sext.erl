@@ -322,10 +322,16 @@ encode_neg_bits(B) ->
 	    Ip = max_value(Pad), % e.g. max_value(3) -> 2#111
 	    <<Padded/bitstring, Ip:Pad, TailSz:8>>;
        true ->
+            ?dbg("TailSz0 = ~p~n", [TailSz0]),
 	    TailPad = 8 - TailSz0,
+            ?dbg("TailPad = ~p~n", [TailPad]),
 	    Itp = (1 bsl TailPad)-1,
-	    Pad = 8 - ((TailSz0 + TailPad + bit_size(Padded) + 1) rem 8),
+            ?dbg("Itp = ~p~n", [Itp]),
+%% 	    Pad = 8 - ((TailSz0 + TailPad + bit_size(Padded) + 1) rem 8),
+            Pad = 8 - ((bit_size(Padded) + 1) rem 8),
+            ?dbg("Pad = ~p~n", [Pad]),
 	    Ip = max_value(Pad),
+            ?dbg("Ip = ~p~n", [Ip]),
 	    ?dbg("Pad = ~p~n", [Pad]),
 	    ?dbg("TailSz = ~p~n", [TailSz]),
 	    <<Padded/bitstring, 0:1, TailBits/bitstring,
