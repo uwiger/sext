@@ -12,12 +12,273 @@
 This library offers a serialization format (a la term_to_binary()) that 
 preserves the Erlang term order.</p>
 
-<h1>Introduction</h1>
+<h1>1. Introduction</h1>
 
-<p>...</p>
+<p>The idea to this library came out of the need for disk-based storage 
+with ordered_set semantics in Erlang. One solution exists - Tokyo Cabinet -
+in which a C routine is used to hook into the sorting logic of TC.</p>
+
+<p>I thought a more generic solution would be to be able to have a version
+of term_to_binary() that respected the ordering semantics of Erlang terms.</p>
+
+<h1>2. Specification</h1>
+
+<h2>2.1 Type tags</h2>
+
+<p>Each data type is encoded using a type tag (1 byte) that represents its order
+in the global Erlang term ordering. The number type is divided into several 
+subtypes, to facilitate a reasonably efficient representation:</p>
+
+<table border="1">
+ <tr align="left">
+  <th>Type</th>
+  <th>Description</th>
+  <th>Tag</th>
+ </tr>
+ <tr>
+  <td>negbig</td>
+  <td>Negative bignum</td>
+  <td>8</td>
+ </tr>
+ <tr>
+  <td>neg4</td>
+  <td>Negative 31-bit integer</td>
+  <td>9</td>
+ </tr>
+ <tr>
+  <td>pos4</td>
+  <td>Positive 31-bit integer</td>
+  <td>10</td>
+ </tr>
+ <tr>
+  <td>posbig</td>
+  <td>Positive bignum</td>
+  <td>11</td>
+ </tr>
+ <tr>
+  <td>atom</td>
+  <td>Obj of type atom()</td>
+  <td>12</td>
+ </tr>
+ <tr>
+  <td>reference</td>
+  <td>Obj of type reference()</td>
+  <td>13</td>
+ </tr>
+ <tr>
+  <td>port</td>
+  <td>Obj of type port()</td>
+  <td>14</td>
+ </tr>
+ <tr>
+  <td>pid</td>
+  <td>Obj of type pid()</td>
+  <td>15</td>
+ </tr>
+ <tr>
+  <td>reference</td>
+  <td>Obj of type list()</td>
+  <td>16</td>
+ </tr>
+ <tr>
+  <td>reference</td>
+  <td>Obj of type list()</td>
+  <td>17</td>
+ </tr>
+ <tr>
+  <td>reference</td>
+  <td>Obj of type binary()</td>
+  <td>18</td>
+ </tr>
+</table>
+
+<h2>2.2 Tuples</h2>
+
+<p>Tuples are encoded as the tuple tag, followed by a 32-bit size element,
+denoting the number of elements in the tuple, followed by each element
+in the tuple individually encoded.</p>
+
+<h2>2.3 Lists</h2>
+
+<p>Lists are encoded as the list tag, followed by each element in the list
+individually encoded, followed by a zero (1 byte).</p>
+
+<h2>2.4 Binaries and bitstrings</h2>
+
+<p>A binary is basically a bitstring whose size is a multiple of 8. From a sorting
+perspective, binaries and bitstrings are both sorted as left-aligned bit 
+arrays.</p>
+
+<pre>
+1&gt; bitstring_to_list(&lt;&lt;11111111111:11&gt;&gt;).
+[56,&lt;&lt;7:3&gt;&gt;]
+</pre>
+
+<p>Binaries and bitstrings are encoded as the binary tag, followed by each whole
+byte, each padded with a leading 1 (one bit), followed by a number of 0-bits
+to pad again make the size a multiple of 8 bits, followed by a byte whose 
+value is Bits, where Bits is the number of "remainder bits"; 8 if the original
+binary is 8-bit aligned.</p>
+
+Example:
+<pre>
+2&gt; sext:encode(&lt;&lt;1,2,3&gt;&gt;).
+&lt;&lt;18,128,192,160,96,8&gt;&gt;
+3&gt; &lt;&lt;18, 1:1,1, 1:1,2, 1:1,3, 0:5, 8&gt;&gt;.
+&lt;&lt;18,128,192,160,96,8&gt;&gt;
+</pre>
+
+<p>In the example above, we inserted 3 1-bits, and therefore had to insert 5 more
+bad bits (zeroes) at the end. The last byte is 8, signifying that the original
+binary was 8-bit aligned.</p>
+
+<p>If the remainder is not an even 8 bits, the remainder bits are padded with
+a 1-bit, just like the others, then left-aligned and padded up to a whole 
+byte (excluding the 1-bit added in front).
+The value of the last byte is the bit size of the remainder.</p>
+
+<p>Example:</p>
+
+<pre>
+2&gt; sext:encode(&lt;&lt;1,2,3,4:3&gt;&gt;).
+&lt;&lt;18,128,192,160,96,8&gt;&gt;
+3&gt; &lt;&lt;18, 1:1,1, 1:1,2, 1:1,3, 1:1,4:3,0:5, 0:4, 3&gt;&gt;.
+&lt;&lt;18,128,192,160,96,8&gt;&gt;
+</pre>
+
+<p>The first part of the bitstring is encoded exactly like above. The number 4:3
+is first padded with 1 then padded at the end to become a whole byte. Then
+an additional pad, 0:4, is inserted to compensate for the fact that we have
+inserted 4 1-bits. Finally, the last byte is 3, to signify the size of the 
+remainder.</p>
+
+<h2>2.5 Positive Numbers</h2>
+
+<p>Numbers are encoded as the corresponding type tag, followed by the integer
+part, a marker indicating the presence of a fraction part, and the fraction
+part, if any. The integer part is encoded differently depending on the size
+of the value. The fraction part is encoded as a binary (without the 'binary'
+type tag).</p>
+
+<h3>2.5.1 Positive small integers, pos4</h3>
+
+<p>Integers up to 31 bits are encoded as &lt;&lt; ?pos4, I:31, F:1 &gt;&gt;
+where I is the integer value, and F is 1 if a fraction part follows; 
+0 otherwise.</p>
+
+<h3>2.5.2 Positive large integers</h3>
+
+<p>Larger integers are converted to a byte string and then encoded like 
+binaries (without the 'binary' type tag), followed by a byte signifying 
+whether a fraction part follows (1 if yes; 0 otherwise).</p>
+
+<pre>
+Bytes = encode_big(I),
+&lt;&lt; ?pos_big, Bytes/binary, F:8 &gt;&gt;
+</pre>
+
+<h3>2.5.3 Fraction part of positive numbers</h3>
+
+<p>The representation of floating point numbers is based on the <a href="http://en.wikipedia.org/wiki/Double_precision_floating-point_format">IEEE 764 Binary 64 standard representation</a>. This is also the representation used by Erlang:</p>
+
+<pre>
+&lt;&lt;Sign:1, Exp:11, Frac:52&gt;&gt; = &lt;&lt;F/float&gt;&gt;
+</pre>
+
+<p>The encoding extracts the integer part and encodes it as a positive integer
+(either pos4 or pos_big), flags the presence of a fraction part, and encodes
+the fraction part as a binary (without the binary tag).</p>
+
+<h2>2.6 Negative Numbers</h2>
+
+<h3>2.6.1 Small negative numbers</h3>
+
+<pre>
+&lt;&lt; ?neg4:8, IRep:31, F:1 &gt;&gt;
+</pre>
+
+<p>A negative number I is encoded as IRep = Max + I, where Max is the largest 
+possible number that can be represented with the number of bits present for 
+the given subtype. For example, Max for neg4 is 0x7FFF FFFF (31 bits). 
+Keep in mind that I &lt; 0.</p>
+
+<p>The fraction flag is inverted, compared to the pos4 representation, so it will
+be 1 if there is no fraction part; 0 otherwise.</p>
+
+<h3>2.6.2 Large negative numbers</h3>
+
+<p>Larger negative numbers are encoded as </p>
+
+<pre>
+{Words, Max} = get_max(-I),
+Bin = encode_bin_elems(list_to_binary(encode_big(Max + I)),
+WordsRep = 16#FFFFffff - Words,
+&lt;&lt; ?neg_big:8, WordsRep:32, Bin/binary, F:8 &gt;&gt;
+</pre>
+
+<p>That is, get_max() figures out how many 64-bit words are needed to represent
+-I (the positive number), and also gives the maximum value that can be 
+represented in so many words. WordsRep in essence becomes a sub-subtag of 
+the negative bignum.</p>
+
+<h3>2.6.3 Fraction of negative numbers</h3>
+
+<p>The fraction is encoded almost like the inverse of the positive fraction
+(as a "negative binary", if such a thing existed). Each byte is padded with
+a 0-bit rather than a 1-bit, and the byte itself is replaced by 16#ff - Byte.
+The sequence is then padded with 1s to become a multiple of 8 bits.</p>
+
+<p>The last byte, denoting the number of significant bits in the last byte,
+is similarly inverted.</p>
+
+<h2>2.7 Atoms</h2>
+
+<p>Atoms are encoded as the atom tag, followed by the string representation of 
+the atom using the binary encoding described above (but without the binary
+tag).</p>
+
+<h2>2.8 References</h2>
+
+<p>The encoding of references is perhaps best described by the code:</p>
+
+<pre>
+encode_ref(R) -&gt;
+    RBin = term_to_binary(R),
+    &lt;&lt;131,114,_Len:16,100,NLen:16,Name:NLen/binary,Rest/binary&gt;&gt; = RBin,
+    NameEnc = encode_bin_elems(Name),
+    RestEnc = encode_bin_elems(Rest),
+    &lt;&lt;?reference, NameEnc/binary, RestEnc/binary&gt;&gt;.
+</pre>
+
+<p>where encode_bin_elems(B) encodes the argument B the same way as a binary
+(excluding the 'binary' type tag).</p>
+
+<h2>2.9 Ports</h2>
+
+<p>The encoding of ports is perhaps best described by the code:</p>
+
+<pre>
+encode_port(P) -&gt;
+    PBin = term_to_binary(P),
+    &lt;&lt;131,102,100,ALen:16,Name:ALen/binary,Rest:5/binary&gt;&gt; = PBin,
+    NameEnc = encode_bin_elems(Name),
+    &lt;&lt;?port, NameEnc/binary, Rest/binary&gt;&gt;.
+</pre>
+
+<h2>2.10 Pids</h2>
+
+<p>The encoding of ports is perhaps best described by the code:</p>
+
+<pre>
+encode_pid(P) -&gt;
+    PBin = term_to_binary(P),
+    &lt;&lt;131,103,100,ALen:16,Name:ALen/binary,Rest:9/binary&gt;&gt; = PBin,
+    NameEnc = encode_bin_elems(Name),
+    &lt;&lt;?pid, NameEnc/binary, Rest/binary&gt;&gt;.
+</pre>
 
 <hr>
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Oct 25 2009, 07:14:05.</i></p>
+<p><i>Generated by EDoc, Oct 25 2009, 11:29:39.</i></p>
 </body>
 </html>

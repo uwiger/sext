@@ -1,6 +1,35 @@
+%%% ----------------------------------------------------------------------------
+%%% Copyright (c) 2009, Erlang Training and Consulting Ltd.
+%%% All rights reserved.
+%%% 
+%%% Redistribution and use in source and binary forms, with or without
+%%% modification, are permitted provided that the following conditions are met:
+%%%    * Redistributions of source code must retain the above copyright
+%%%      notice, this list of conditions and the following disclaimer.
+%%%    * Redistributions in binary form must reproduce the above copyright
+%%%      notice, this list of conditions and the following disclaimer in the
+%%%      documentation and/or other materials provided with the distribution.
+%%%    * Neither the name of Erlang Training and Consulting Ltd. nor the
+%%%      names of its contributors may be used to endorse or promote products
+%%%      derived from this software without specific prior written permission.
+%%% 
+%%% THIS SOFTWARE IS PROVIDED BY Erlang Training and Consulting Ltd. ''AS IS''
+%%% AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+%%% IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+%%% ARE DISCLAIMED. IN NO EVENT SHALL Erlang Training and Consulting Ltd. BE
+%%% LIABLE SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+%%% BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+%%% WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+%%% OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+%%% ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+%%% ----------------------------------------------------------------------------
+
+%% @author Ulf Wiger <ulf.wiger@erlang-consulting.com>
+%% @doc Sortable serialization library
+%% @end
 -module(sext).
 
--compile(export_all).
+-export([encode/1, decode/1]).
 
 -define(negbig   , 8).
 -define(neg4     , 9).
@@ -26,10 +55,13 @@
 -include_lib("eunit/include/eunit.hrl").
 
 
-pp(none) -> "<none>";
-pp(B) when is_bitstring(B) ->
-    [ $0 + I || <<I:1>> <= B ].
-
+%% @spec encode(T::term()) -> binary()
+%% @doc Encodes any Erlang term into a binary.
+%% The lexical sorting properties of the encoded binary match those of the
+%% original Erlang term. That is, encoded terms sort the same way as the 
+%% original terms would.
+%% @end
+%%
 encode(X) when is_tuple(X)     -> encode_tuple(X);
 encode(X) when is_list(X)      -> encode_list(X);
 encode(X) when is_pid(X)       -> encode_pid(X);
@@ -39,6 +71,26 @@ encode(X) when is_number(X)    -> encode_number(X);
 encode(X) when is_binary(X)    -> encode_binary(X);
 encode(X) when is_bitstring(X) -> encode_bitstring(X);
 encode(X) when is_atom(X)      -> encode_atom(X).
+
+
+%% @spec decode(B::binary()) -> term()
+%% @doc Decodes a binary generated using the function sext:encode/1.
+%% @end
+%%
+decode(Elems) ->
+    case decode_next(Elems) of
+	{Term, <<>>} -> Term;
+	{Term, []} -> Term;
+	Other -> erlang:error(badarg, Other)
+    end.
+
+
+
+
+pp(none) -> "<none>";
+pp(B) when is_bitstring(B) ->
+    [ $0 + I || <<I:1>> <= B ].
+
 
 
 encode_tuple(T) ->
@@ -112,22 +164,14 @@ encode_number(F) when is_float(F) ->
 %% 
 encode_float(F) ->
     <<Sign:1, Exp0:11, Frac:52>> = <<F/float>>,
-    ?dbg("F = ~p | Exp0 = ~p | Frac = ~p~n", [F, Exp0, Frac]),
+    ?dbg("F = ~p | Exp0 = ~p | Frac = ~p~n", [cF, Exp0, Frac]),
     {Int0, Fraction} =
 	case Exp0 - 1023 of
 	    NegExp when NegExp < 0 ->
 		Offs = -NegExp,
 		?dbg("NegExp = ~p, Offs = ~p~n"
 		     "Frac = ~p~n", [NegExp, Offs, Frac]),
-%% 		PadN = if Sign == 1 ->
-%% 			       %% pad with 1 if negative
-%% 			       trunc(math:pow(2,Offs)) - 1;
-%% 			  Sign == 0 ->
-%% 			       0
-%% 		       end,
-                PadN = 0,
-		?dbg("PadN = ~p; B = ~p~n", [PadN,<<PadN:Offs>>]),
-		{0, << PadN:Offs, 1:1,Frac:52 >>};
+		{0, << 0:Offs, 1:1,Frac:52 >>};
 	    Exp1 ->
 		?dbg("Exp1 = ~p~n", [Exp1]),
 		if Exp1 >= 52 ->
@@ -209,8 +253,6 @@ encode_neg_int(I,R) when I < -16#7fFFffFF ->
 	    Rbits = encode_neg_bits(R),
 	    ?dbg("R = ~p -> RBits = ~p~n", [pp(R), pp(Rbits)]),
 	    <<?negbig, Bytes/binary, 0, Rbits/binary>>
-%% 	    Rbits = encode_neg_real(R),
-%% 	    <<?negbig, Bytes/binary, 0, Rbits/binary>>
     end.
 
 encode_neg_real(R) ->
@@ -228,14 +270,13 @@ encode_big(I) ->
     ?dbg("Bl = ~p~n", [Bl]),
     Bb = list_to_binary(Bl),
     ?dbg("Bb = ~p~n", [Bb]),
-    encode_bin_elems(list_to_binary(encode_big1(I))).
+    encode_bin_elems(Bb).
 
 encode_big_neg(I) ->
     {Words, Max} = get_max(-I),
     ?dbg("Words = ~p | Max = ~p~n", [Words,Max]),
     Iadj = Max + I, 		% keep in mind that I < 0
     ?dbg("IAdj = ~p~n", [Iadj]),
-%%    Bin = encode_neg_bin_elems(list_to_binary(encode_big1(Iadj))),
     Bin = encode_bin_elems(list_to_binary(encode_big1(Iadj))),
     ?dbg("Bin = ~p~n", [Bin]),
     WordsAdj = 16#ffffFFFF - Words,
@@ -322,13 +363,8 @@ pad_bytes(Bits, Acc) when is_bitstring(Bits) ->
     {Acc, Bits}.
 
 
-
-decode(Elems) ->
-    case decode_next(Elems) of
-	{Term, <<>>} -> Term;
-	{Term, []} -> Term;
-	Other -> erlang:error(badarg, Other)
-    end.
+%% ------------------------------------------------------
+%% Decoding routines
 
 %% decode_next([?number,N|Rest]) -> {N, Rest};
 decode_next(<<?atom,Rest/binary>>) -> decode_atom(Rest);
