@@ -1,0 +1,10 @@
+@author Ulf Wiger <ulf.wiger@erlang-consulting.com>
+@doc A sortable serialization library
+This library offers a serialization format (a la term_to_binary()) that 
+preserves the Erlang term order.
+
+<h1>Introduction</h1>
+
+<p>...</p>
+
+@end
