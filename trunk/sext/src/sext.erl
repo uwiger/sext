@@ -30,6 +30,7 @@
 -module(sext).
 
 -export([encode/1, decode/1]).
+-export([prefix/1]).
 
 -define(negbig   , 8).
 -define(neg4     , 9).
@@ -72,6 +73,46 @@ encode(X) when is_binary(X)    -> encode_binary(X);
 encode(X) when is_bitstring(X) -> encode_bitstring(X);
 encode(X) when is_atom(X)      -> encode_atom(X).
 
+%% @spec prefix(X::term()) -> binary()
+%% @doc Encodes a binary for prefix matching of similar encoded terms.
+%% Lists and tuples can be prefixed by using the '_' marker, similarly
+%% to Erlang match specifications. For example:
+%% <ul>
+%%  <li>`prefix({1,2,'_','_'})' will result in a binary that is the same as 
+%%    the first part of any encoded 4-tuple with the first two elements being
+%%    1 and 2. The prefix algorithm will search for the first '_', and treat
+%%    all following elements as if they were '_'.</li>
+%%  <li>`prefix([1,2|'_'])' will result in a binary that is the same as the
+%%    first part of any encoded list where the first two elements are 1 and 2.
+%%    `prefix([1,2,'_'])' will give the same result, as the prefix pattern
+%%    is the same for all lists starting with [1,2|...].</li>
+%%  <li>`prefix(Binary)' will result in a binary that is the same as the encoded
+%%    version of Binary, except that, instead of padding and terminating, the
+%%    encoded binary is truncated to the longest byte-aligned binary. The same
+%%    is done for bitstrings.</li>
+%%  <li>`prefix({1,[1,2|'_'],'_'})' will prefix-encode the second element, and
+%%    let it end the resulting binary. This prefix will match any 3-tuple where
+%%    the first element is 1 and the second element is a list where the first
+%%    two elements are 1 and 2.</li>
+%%  <li>`prefix([1,[1|'_']|'_'])' will result in a prefix that matches all lists
+%%    where the first element is 1 and the second element is a list where the 
+%%    first element is 1.</li>
+%%  <li>For all other data types, the prefix is the same as the encoded term.
+%%    </li>
+%% </ul>
+%% @end
+%%
+prefix(X) when is_tuple(X)     -> prefix_tuple(X);
+prefix(X) when is_list(X)      -> prefix_list(X);
+prefix(X) when is_pid(X)       -> encode_pid(X);
+prefix(X) when is_port(X)      -> encode_port(X);
+prefix(X) when is_reference(X) -> encode_ref(X);
+prefix(X) when is_number(X)    -> encode_number(X);
+prefix(X) when is_binary(X)    -> prefix_binary(X);
+prefix(X) when is_bitstring(X) -> prefix_bitstring(X);
+prefix(X) when is_atom(X)      -> encode_atom(X).
+
+    
 
 %% @spec decode(B::binary()) -> term()
 %% @doc Decodes a binary generated using the function sext:encode/1.
@@ -97,6 +138,11 @@ encode_tuple(T) ->
     Sz = size(T),
     encode_tuple_elems(1, Sz, T, <<?tuple, Sz:32>>).
 
+prefix_tuple(T) ->
+    Sz = size(T),
+    Elems = tuple_to_list(T),
+    prefix_tuple_elems(Elems, <<?tuple, Sz:32>>).
+
 %% It's easier to iterate over a tuple by converting it to a list, but
 %% since the tuple /can/ be huge, let's do it this way.
 encode_tuple_elems(P, Sz, T, Acc) when P =< Sz ->
@@ -105,16 +151,41 @@ encode_tuple_elems(P, Sz, T, Acc) when P =< Sz ->
 encode_tuple_elems(_, _, _, Acc) ->
     Acc.
 
+prefix_tuple_elems(['_'|_], Acc) ->
+    Acc;
+prefix_tuple_elems([E, '_'|_], Acc) ->
+    P = prefix(E),
+    <<Acc/binary, P/binary>>;
+prefix_tuple_elems([E], Acc) ->
+    P = prefix(E),
+    <<Acc/binary, P/binary>>;
+prefix_tuple_elems([H|T], Acc) ->
+    E = encode(H),
+    prefix_tuple_elems(T, <<Acc/binary, E/binary>>);
+prefix_tuple_elems([], Acc) ->
+    Acc.
+
 encode_list(L) ->
     encode_list_elems(L, <<?list>>).
+
+prefix_list(L) ->
+    prefix_list_elems(L, <<?list>>).
 
 
 encode_binary(B)    ->
     Enc = encode_bin_elems(B),
     <<?binary:8, Enc/binary>>.
 
+prefix_binary(B) ->
+    Enc = prefix_bin_elems(B),
+    <<?binary:8, Enc/binary>>.
+
 encode_bitstring(B) ->
     Enc = encode_bits_elems(B),
+    <<?binary:8, Enc/binary>>.
+
+prefix_bitstring(B) ->
+    Enc = prefix_bits_elems(B),
     <<?binary:8, Enc/binary>>.
 
 encode_pid(P) ->
@@ -255,14 +326,14 @@ encode_neg_int(I,R) when I < -16#7fFFffFF ->
 	    <<?negbig, Bytes/binary, 0, Rbits/binary>>
     end.
 
-encode_neg_real(R) ->
-    ?dbg("encode_neg_real(~p)~n", [R]),
-     Sz = bit_size(R),
-     MaxR = (1 bsl Sz) - 1,
-     <<Ri:Sz>> = R,
-     RAdj = MaxR - Ri,
-    ?dbg("RAdj = ~p~n", [<<RAdj:Sz>>]),
-    encode_bits_elems(<<RAdj:Sz>>).
+%% encode_neg_real(R) ->
+%%     ?dbg("encode_neg_real(~p)~n", [R]),
+%%      Sz = bit_size(R),
+%%      MaxR = (1 bsl Sz) - 1,
+%%      <<Ri:Sz>> = R,
+%%      RAdj = MaxR - Ri,
+%%     ?dbg("RAdj = ~p~n", [<<RAdj:Sz>>]),
+%%     encode_bits_elems(<<RAdj:Sz>>).
 
 
 encode_big(I) ->
@@ -298,11 +369,41 @@ encode_list_elems([H|T], Acc) ->
     Enc = encode(H),
     encode_list_elems(T, <<Acc/binary, Enc/binary>>).
 
+prefix_list_elems([], Acc)    ->  Acc;
+prefix_list_elems(['_'], Acc) ->  Acc;
+prefix_list_elems([H|'_'], Acc) ->
+    P = prefix(H),
+    <<Acc/binary, P/binary>>;
+prefix_list_elems([H,'_'|_], Acc) ->
+    P = prefix(H),
+    <<Acc/binary, P/binary>>;
+prefix_list_elems([H|T], Acc) ->
+    E = encode(H),
+    prefix_list_elems(T, <<Acc/binary, E/binary>>).
+
+
+
 encode_bin_elems(<<>>) ->
     <<8>>;
 encode_bin_elems(B) ->
     Pad = 8 - (size(B) rem 8),
     << (<< <<1:1, B1:8>> || <<B1>> <= B >>)/bitstring, 0:Pad, 8 >>.
+
+prefix_bin_elems(B) ->
+    Stuffed = << <<1:1, B1:8>> || <<B1>> <= B >>,
+    trunc_bin_pfx(Stuffed).
+
+trunc_bin_pfx(Stuffed) ->
+    BitSz = bit_size(Stuffed),
+    case BitSz rem 8 of
+	0 ->
+	    Stuffed;
+	Rem ->
+	    PSz = (BitSz - Rem) div 8,
+	    <<P:PSz/binary, _:Rem>> = Stuffed,
+	    P
+    end.
+    
 
 %% encode_neg_bin_elems(<<>>) ->
 %%     <<247>>;   % 16#ff - 8
@@ -358,7 +459,11 @@ encode_bits_elems(B) ->
     TailPad = 8-TailSz,
     Pad = 8 - ((TailSz + TailPad + bit_size(Padded) + 1) rem 8),
     <<Padded/bitstring, 1:1, TailBits/bitstring, 0:TailPad, 0:Pad, TailSz:8>>.
-	
+
+prefix_bits_elems(B) ->	
+    {Padded, TailBits} = pad_bytes(B),
+    Stuffed = <<Padded/binary, 1:1, TailBits/bitstring>>,
+    trunc_bin_pfx(Stuffed).
 
 pad_bytes(Bin) ->
     pad_bytes(Bin, <<>>).
@@ -597,9 +702,9 @@ decode_neg_binary(<<0:1,H:8,Rest/bitstring>>, N, Acc) ->
 
 
 
-max_fraction() ->
-    %% 52-bit array of ones
-    max_value(52).
+%% max_fraction() ->
+%%     %% 52-bit array of ones
+%%     max_value(52).
 
 
 %% The largest value that fits in Sz bits
@@ -611,10 +716,10 @@ imax(1) -> max_value(64);
 imax(2) -> max_value(128);
 imax(Words) -> max_value(Words*64).
 
-imax1(0, Acc) ->
-    Acc;
-imax1(N, Acc) when N > 0 ->
-    imax1(N-1, (Acc bsl 64) bor ?IMAX1).
+%% imax1(0, Acc) ->
+%%     Acc;
+%% imax1(N, Acc) when N > 0 ->
+%%     imax1(N-1, (Acc bsl 64) bor ?IMAX1).
 
 %% Get the smallest imax/1 value that's larger than I.
 get_max(I) -> get_max(I, 1, imax(1)).
