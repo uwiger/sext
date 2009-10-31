@@ -25,11 +25,37 @@
 %%% ----------------------------------------------------------------------------
 
 %% @author Ulf Wiger <ulf.wiger@erlang-consulting.com>
-%% @doc Bare-bones Tokyo Tyrant interface library
+%% @doc Bare-bones Tokyo Tyrant interface library.
+%% This is an example to illustrate the use of Sortable EXernal Term (sext)
+%% encoding.
+%%
+%% <a href="http://1978th.net/tokyotyrant/">Tokyo Tyrant</a> (TT) is an add-on 
+%% to <a href="http://1978th.net/tokyocabinet/">Tokyo Cabinet</a>, adding
+%% support for concurrent and remote access to Tokyo Cabinet (TC) through a 
+%% TCP socket interface. TC supports storage of variable-length byte strings
+%% as key-value pairs. The storage type can either be RAM-only or disk, and
+%% either hash table or B-tree.
+%%
+%% Using sext-encoded terms in combination with TT's B-tree storage, it is
+%% possible to store very large amounts of data on disk while honoring the 
+%% Erlang Term ordering semantics. Using the `sext:prefix/1' function, it is
+%% also possible to perform efficient range queries.
+%%
+%% Tokyo Tyrant is easy to install and get running. This module does not show
+%% how that is done, nor does it automate the task of starting a TT server.
+%% 
 %% @end
 -module(tt_proto).
 
 -behaviour(gen_server).
+
+-export([open/2,
+	 put/3,
+	 get/2,
+	 mget/2,
+	 keys/2]).
+
+%% internal exports
 -export([init/1,
 	 handle_call/3,
 	 handle_cast/2,
@@ -131,6 +157,8 @@ decode(Bin) ->
 encode_prefix(Term) ->
     sext:prefix(Term).
 
+
+%% @hidden
 init({_Name, Opts}) ->
 %%    TTName = tt_name(Name, Opts),
     Port = proplists:get_value(port, Opts, ?DEFAULT_PORT),
@@ -142,6 +170,7 @@ init({_Name, Opts}) ->
 	    Error
     end.
 
+%% @hidden
 handle_call({cmd, Req}, _From, #st{socket = Sock} = S) ->
     Msg = mk_req(Req),
     gen_tcp:send(Sock, Msg),
@@ -153,18 +182,21 @@ handle_call({ask, Req}, _From, #st{socket = Sock} = S) ->
     Reply = ask_reply(Req, Sock),
     {reply, Reply, S}.
 
-	
 
+%% @hidden
 handle_info(Msg, S) ->
     io:fwrite("handle_info(~p, ~p)~n", [Msg, S]),
     {noreply, S}.
 
+%% @hidden
 handle_cast(_, S) ->
     {stop, unknown_cast, S}.
 
+%% @hidden
 terminate(Reason, S) ->
     io:fwrite("terminate(~p, ~p)~n", [Reason, S]).
 
+%% @hidden
 code_change(_FromVsn, S, _Extra) ->
     {ok, S}.
 

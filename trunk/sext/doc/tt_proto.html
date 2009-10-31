@@ -14,50 +14,73 @@
 <p><b>Behaviours:</b> <a href="gen_server.html"><tt>gen_server</tt></a>.</p>
 <p><b>Authors:</b> Ulf Wiger (<a href="mailto:ulf.wiger@erlang-consulting.com"><tt>ulf.wiger@erlang-consulting.com</tt></a>).</p>
 
-<h2><a name="description">Description</a></h2>Bare-bones Tokyo Tyrant interface library
+<h2><a name="description">Description</a></h2><p>Bare-bones Tokyo Tyrant interface library.  
+This is an example to illustrate the use of Sortable EXernal Term (sext)  
+encoding.</p>
+ 
+  <p><a href="http://1978th.net/tokyotyrant/">Tokyo Tyrant</a> (TT) is an add-on
+  to <a href="http://1978th.net/tokyocabinet/">Tokyo Cabinet</a>, adding  
+support for concurrent and remote access to Tokyo Cabinet (TC) through a  
+TCP socket interface. TC supports storage of variable-length byte strings  
+as key-value pairs. The storage type can either be RAM-only or disk, and  
+either hash table or B-tree.</p>
+ 
+  <p>Using sext-encoded terms in combination with TT's B-tree storage, it is
+  possible to store very large amounts of data on disk while honoring the
+  Erlang Term ordering semantics. Using the <code>sext:prefix/1</code> function, it is  
+also possible to perform efficient range queries.</p>
+ 
+  Tokyo Tyrant is easy to install and get running. This module does not show
+  how that is done, nor does it automate the task of starting a TT server.
+ 
 <h2><a name="index">Function Index</a></h2>
-<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#code_change-3">code_change/3</a></td><td></td></tr>
-<tr><td valign="top"><a href="#handle_call-3">handle_call/3</a></td><td></td></tr>
-<tr><td valign="top"><a href="#handle_cast-2">handle_cast/2</a></td><td></td></tr>
-<tr><td valign="top"><a href="#handle_info-2">handle_info/2</a></td><td></td></tr>
-<tr><td valign="top"><a href="#init-1">init/1</a></td><td></td></tr>
-<tr><td valign="top"><a href="#terminate-2">terminate/2</a></td><td></td></tr>
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#get-2">get/2</a></td><td>Looks up Key in the database TT.</td></tr>
+<tr><td valign="top"><a href="#keys-2">keys/2</a></td><td>Performs a prefix search in database TT based on Prefix.</td></tr>
+<tr><td valign="top"><a href="#mget-2">mget/2</a></td><td>Fetches multiple objects from the database TT.</td></tr>
+<tr><td valign="top"><a href="#open-2">open/2</a></td><td>Connects to a running Tokyo Tyrant database server.</td></tr>
+<tr><td valign="top"><a href="#put-3">put/3</a></td><td>Inserts a <code>{Key,Value}</code> tuple in the database TT.</td></tr>
 </table>
 
 <h2><a name="functions">Function Details</a></h2>
 
-<h3 class="function"><a name="code_change-3">code_change/3</a></h3>
+<h3 class="function"><a name="get-2">get/2</a></h3>
 <div class="spec">
-<p><tt>code_change(FromVsn, S, Extra) -&gt; any()</tt></p>
-</div>
+<p><tt>get(TT, Key::term()) -&gt; {ok, Value} | {error, Reason}</tt></p>
+</div><p>Looks up Key in the database TT.
+  Returns <code>{ok,Value}</code> if found, otherwise <code>{error,Reason}</code>.</p>
 
-<h3 class="function"><a name="handle_call-3">handle_call/3</a></h3>
+<h3 class="function"><a name="keys-2">keys/2</a></h3>
 <div class="spec">
-<p><tt>handle_call(X1, From, St) -&gt; any()</tt></p>
-</div>
+<p><tt>keys(TT, Prefix) -&gt; {ok, Keys} | {error, Reason}</tt></p>
+</div><p>Performs a prefix search in database TT based on Prefix.
+  For details on Prefix, @see sext:prefix/1.</p>
 
-<h3 class="function"><a name="handle_cast-2">handle_cast/2</a></h3>
+<h3 class="function"><a name="mget-2">mget/2</a></h3>
 <div class="spec">
-<p><tt>handle_cast(X1, S) -&gt; any()</tt></p>
-</div>
+<p><tt>mget(TT, Keys::[term()]) -&gt; {ok, [{K, V}]} | {error, Reason}</tt></p>
+</div><p>Fetches multiple objects from the database TT.
+  All objects matching the list of keys will be returned. If no objects match,
+  the return value will be <code>{ok, []}</code>.</p>
 
-<h3 class="function"><a name="handle_info-2">handle_info/2</a></h3>
+<h3 class="function"><a name="open-2">open/2</a></h3>
 <div class="spec">
-<p><tt>handle_info(Msg, S) -&gt; any()</tt></p>
-</div>
+<p><tt>open(Name, Opts) -&gt; {ok, pid()}</tt>
+<ul class="definitions"><li><tt>Opts = [Opt]</tt></li>
+<li><tt>Opt = {regname, atom()} | {port, integer()}</tt></li>
+</ul></p>
+</div><p>Connects to a running Tokyo Tyrant database server.
+  The default port, 1978, will be used unless another port is specified.
+  If the <code>regname</code> option is present, the Tokyo Tyrant proxy process will
+  register itself under that name, and the registered name can be used as
+  an alias when accessing the database.</p>
 
-<h3 class="function"><a name="init-1">init/1</a></h3>
+<h3 class="function"><a name="put-3">put/3</a></h3>
 <div class="spec">
-<p><tt>init(X1) -&gt; any()</tt></p>
-</div>
-
-<h3 class="function"><a name="terminate-2">terminate/2</a></h3>
-<div class="spec">
-<p><tt>terminate(Reason, S) -&gt; any()</tt></p>
-</div>
+<p><tt>put(TT, Key::term(), Value::term()) -&gt; ok | {error, Reason}</tt></p>
+</div><p>Inserts a <code>{Key,Value}</code> tuple in the database TT.</p>
 <hr>
 
 <div class="navbar"><a name="#navbar_bottom"></a><table width="100%" border="0" cellspacing="0" cellpadding="2" summary="navigation bar"><tr><td><a href="overview-summary.html" target="overviewFrame">Overview</a></td><td><a href="http://www.erlang.org/"><img src="erlang.png" align="right" border="0" alt="erlang logo"></a></td></tr></table></div>
-<p><i>Generated by EDoc, Oct 31 2009, 11:50:52.</i></p>
+<p><i>Generated by EDoc, Oct 31 2009, 12:09:31.</i></p>
 </body>
 </html>
