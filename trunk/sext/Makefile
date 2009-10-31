@@ -63,7 +63,7 @@ dialyzer:
 #	@erlc -o util/ util/make_doc.erl
 #	@echo Generating documentation from edoc
 #	@erl -pa util/ -noinput -s make_doc edoc
-doc/edoc-info: doc/overview.edoc util $(SOURCES) 
+doc/edoc-info: doc/overview.edoc util $(SOURCES) $(EXAMPLES)
 	@echo Generating documentation from edoc
 	@erl -pa util/ -noinput -s make_doc edoc
 

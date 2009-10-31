@@ -30,7 +30,8 @@
 
 edoc() ->
     try
-        edoc:application(?THIS_APP, "./", [{doc, "doc/"}])
+        edoc:application(?THIS_APP, "./", [{doc, "doc/"},
+					   {source_path, ["src/","examples/"]}])
     catch _:_ ->
         halt(1)
     end,
