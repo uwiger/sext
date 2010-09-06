@@ -10,14 +10,21 @@ prop_negbits() ->
                 B == B1
             end).
 	    
-
+%% In this property, the ?IMPLIES condition guards us against the 
+%% unfortunate case where {1, 1.0} will have a strict ordering when 
+%% encoded (in order to satisfy the encode property), but not in Erlang
+%% since they compare as equal. It seems a reasonable limitation, that 
+%% we limit ourselves to testing the sort order of term pairs where the
+%% values actually differ.
 prop_sort() ->
     ?FORALL({T1,T2}, {term(), term()},
-      begin
-	  {X1,X2} = {sext:encode(T1), sext:encode(T2)},
-	  collect(size(term_to_binary({T1,T2})),
-		  comp(X1,X2) == comp(T1,T2))
-      end).
+	    ?IMPLIES(
+	       T1 /= T2,
+	       begin
+		   {X1,X2} = {sext:encode(T1), sext:encode(T2)},
+		   collect(size(term_to_binary({T1,T2})),
+			   comp(X1,X2) == comp(T1,T2))
+	       end)).
 
 prop_sort_fs() ->
     ?FORALL({R1,R2}, {pos_float(),pos_float()},
