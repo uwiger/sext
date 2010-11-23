@@ -1,85 +1,42 @@
-APPLICATION := sext
-APP_FILE := ebin/$(APPLICATION).app
-SOURCES := $(wildcard src/*.erl)
-HEADERS := $(wildcard src/*.hrl)
-MODULES := $(patsubst src/%.erl,%,$(SOURCES))
-BEAMS := $(patsubst %,ebin/%.beam,$(MODULES))
+## The MIT License
+##
+## Copyright (c) 2008-2010 Ulf Wiger <ulf@wiger.net>,
+##
+## Permission is hereby granted, free of charge, to any person obtaining a
+## copy of this software and associated documentation files (the "Software"),
+## to deal in the Software without restriction, including without limitation
+## the rights to use, copy, modify, merge, publish, distribute, sublicense,
+## and/or sell copies of the Software, and to permit persons to whom the
+## Software is furnished to do so, subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in
+## all copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+## THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+## DEALINGS IN THE SOFTWARE.
 
-comma := ,
-e :=
-space := $(e) $(e)
-MODULELIST := $(subst $(space),$(comma),$(MODULES))
+.PHONY: all compile clean eunit test eqc doc
 
-TEST_SOURCES := $(wildcard test/*.erl)
-TEST_BEAMS := $(patsubst %.erl,%.beam, $(TEST_SOURCES))
+DIRS=src 
 
-EXAMPLE_SOURCES := $(wildcard examples/*.erl)
-EXAMPLE_BEAMS := $(patsubst %.erl,%.beam, $(EXAMPLE_SOURCES))
+all: compile
 
-UTIL_SOURCES := $(wildcard util/*.erl)
-UTIL_BEAMS := $(patsubst %.erl,%.beam, $(UTIL_SOURCES))
+compile:
+	./rebar compile
 
-include vsn.mk
-
-.PHONY: all clean dialyzer
-
-all: $(APPLICATION) doc util
-
-$(APPLICATION): $(BEAMS) $(APP_FILE) $(UTIL_BEAMS)
-
-test: $(APPLICATION) $(TEST_BEAMS) util/run_test.beam
-	@echo Running tests
-	@erl -pa util/ -pa ebin/ -pa test/ -noinput -s run_test run
-
-test/%.beam: test/%.erl
-	@echo Compiling $<
-	@erlc +debug_info -o test/ $<
-
-examples: $(EXAMPLE_BEAMS)
-
-examples/%.beam: examples/%.erl
-	@echo Compiling $<
-	@erlc -pa ebin -pa examples +debug_info -o examples/ $<
-
-$(APP_FILE): src/$(APPLICATION).app.src
-	@echo Generating $@
-	@sed -e 's/@MODULES@/$(MODULELIST)/' -e 's/@VSN@/$(VSN)/' $< > $@
-
-ebin/%.beam: src/%.erl $(HEADERS) $(filter-out $(wildcard ebin), ebin)
-	@echo Compiling $<
-	@erlc +debug_info +warn_missing_spec -o ebin/ $<
-
-ebin:
-	@echo Creating ebin/
-	@mkdir ebin/
-
-doc: doc/edoc-info util
-
-dialyzer: 
-	@echo Running dialyzer on sources
-	@dialyzer --src -r src/ 
-
-#doc/edoc-info: doc/overview.edoc util $(SOURCES) 
-#	@erlc -o util/ util/make_doc.erl
-#	@echo Generating documentation from edoc
-#	@erl -pa util/ -noinput -s make_doc edoc
-doc/edoc-info: doc/overview.edoc util $(SOURCES) $(EXAMPLES)
-	@echo Generating documentation from edoc
-	@erl -pa util/ -noinput -s make_doc edoc
-
-util: $(UTIL_BEAMS)
-
-util/%.beam: util/%.erl
-	@erlc -o util/ -DTHIS_APP=$(APPLICATION) $<
-
-util/my_plt.plt: util/make_plt.beam
-	@erl -noinput -pa util -eval 'make_plt:add([syntax_tools],"util/my_plt.plt")'
 
 clean:
-	@echo Cleaning
-	@rm -f ebin/*.{beam,app} test/*.beam doc/*.{html,css,png} doc/edoc-info
-	@rm -r cover_report
-	@rm -f util/*.beam
+	./rebar clean
 
-release: clean all test dialyzer
-	@util/releaser $(APPLICATION) $(VSN)
+eunit:
+	./rebar eunit
+
+test: eunit
+
+doc:
+	./rebar doc
