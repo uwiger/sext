@@ -18,13 +18,11 @@ prop_negbits() ->
 %% values actually differ.
 prop_sort() ->
     ?FORALL({T1,T2}, {term(), term()},
-	    ?IMPLIES(
-	       T1 /= T2,
 	       begin
 		   {X1,X2} = {sext:encode(T1), sext:encode(T2)},
 		   collect(size(term_to_binary({T1,T2})),
-			   comp(X1,X2) == comp(T1,T2))
-	       end)).
+			   comp(X1,X2) == comp_i(T1,T2))
+	       end).
 
 prop_sort_fs() ->
     ?FORALL({R1,R2}, {pos_float(),pos_float()},
@@ -59,10 +57,41 @@ prop_encode_neg_big() ->
 	    sext:decode(sext:encode(T)) == T).
 
 
-
+comp(A,B) when A == B, A =/= B ->
+    %% can only happen when either is a float and the other an int
+    IsMore = if A < 0 ->
+		     is_float(B);
+		true ->
+		     is_float(A)
+	     end,
+    case IsMore of
+	true  -> more;
+	false -> less
+    end;
 comp(A,B) when A < B -> less;
 comp(A,A) -> equal;
 comp(_,_) -> more.
+
+comp_i(Ta, Tb) when is_tuple(Ta), is_tuple(Tb), tuple_size(Ta) == tuple_size(Tb) ->
+    comp_l(tuple_to_list(Ta), tuple_to_list(Tb));
+comp_i(La, Lb) when is_list(La), is_list(Lb) ->
+    comp_l(La, Lb);
+comp_i(A, B) ->
+    comp(A, B).
+
+comp_l([]     , []    ) -> equal;
+comp_l([]     , [_|_] ) -> less;
+comp_l([_|_]  , []    ) -> more;
+comp_l([Ha|Ta],[Hb|Tb]) -> 
+    case comp(Ha, Hb) of
+	equal ->
+	    comp_l(Ta, Tb);
+	Other ->
+	    Other
+    end.
+
+    
+
 
 
 term() ->
