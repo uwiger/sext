@@ -30,6 +30,7 @@
 -module(sext).
 
 -export([encode/1, decode/1]).
+-export([encode_sb32/1, decode_sb32/1]).
 -export([prefix/1]).
 
 -define(negbig   , 8).
@@ -73,6 +74,19 @@ encode(X) when is_binary(X)    -> encode_binary(X);
 encode(X) when is_bitstring(X) -> encode_bitstring(X);
 encode(X) when is_atom(X)      -> encode_atom(X).
 
+%% @spec encode_sb32(Term::any()) -> binary()
+%% @doc Encodes any Erlang term into a binary.
+%% This is similar to {@link encode/1}, but produces an octet string that 
+%% can be used without escaping in file names (containing only the characters
+%% 0..9, A..V and '-'). The sorting properties are preserved.
+%%
+%% Note: The encoding used is inspired by the base32 encoding described in
+%% RFC3548, but uses a different alphabet in order to preserve the sort order.
+%% @end
+%%
+encode_sb32(Term) ->
+    to_sb32(encode(Term)).
+
 %% @spec prefix(X::term()) -> binary()
 %% @doc Encodes a binary for prefix matching of similar encoded terms.
 %% Lists and tuples can be prefixed by using the '_' marker, similarly
@@ -115,7 +129,7 @@ prefix(X) when is_atom(X)      -> encode_atom(X).
     
 
 %% @spec decode(B::binary()) -> term()
-%% @doc Decodes a binary generated using the function sext:encode/1.
+%% @doc Decodes a binary generated using the function {@link sext:encode/1}.
 %% @end
 %%
 decode(Elems) ->
@@ -125,7 +139,12 @@ decode(Elems) ->
 	Other -> erlang:error(badarg, Other)
     end.
 
-
+%% spec decode_sb32(B::binary()) -> term()
+%% @doc Decodes a binary generated using the function {@link encode_sb32/1}.
+%% @end
+%%
+decode_sb32(Data) ->
+    decode(from_sb32(Data)).
 
 
 pp(none) -> "<none>";
@@ -728,6 +747,60 @@ get_max(I, W, Max) when I > Max ->
 get_max(_, W, Max) ->
     {W, Max}.
     
+%% sb32 (Sortable base32) is a variant of RFC3548, slightly rearranged to 
+%% preserve the lexical sorting properties. Base32 was chosen to avoid 
+%% filename-unfriendly characters. Also important is that the padding 
+%% character be less than any character in the alphabet
+%%
+%% sb32 alphabet:
+%%
+%% 0 0     6 6     12 C     18 I     24 O     30 U
+%% 1 1     7 7     13 D     19 J     25 P     31 V
+%% 2 2     8 8     14 E     20 K     26 Q  (pad) -
+%% 3 3     9 9     15 F     21 L     27 R
+%% 4 4    10 A     16 G     22 M     28 S
+%% 5 5    11 B     17 H     23 N     29 T
+%%
+to_sb32(Bits) when is_bitstring(Bits) ->
+    Sz = bit_size(Bits),
+    {Chunk, Rest, Pad} =
+	case Sz rem 5 of
+	    0 -> {Bits, <<>>, <<>>};
+	    R -> sb32_encode_chunks(Sz, R, Bits)
+	end,
+    Enc = << << (c2sb32(C1)) >> || 
+	      <<C1:5>> <= Chunk >>,
+    if Rest == << >> ->
+	    Enc;
+       true ->
+	    << Enc/bitstring, (c2sb32(Rest)):8, Pad/binary >>
+    end.
+
+sb32_encode_chunks(Sz, Rem, Bits) ->
+    ChunkSz = Sz - Rem,
+    << C:ChunkSz/bitstring, Rest:Rem >> = Bits,
+    Pad = encode_pad(Rem),
+    {C, Rest, Pad}.
+
+encode_pad(3) -> <<"------">>;
+encode_pad(1) -> <<"----">>;
+encode_pad(4) -> <<"---">>;
+encode_pad(2) -> <<"-">>.
+
+from_sb32(<< C:8, "------" >>) -> << (sb322c(C)):3 >>;
+from_sb32(<< C:8, "----" >>  ) -> << (sb322c(C)):1 >>;
+from_sb32(<< C:8, "---" >>   ) -> << (sb322c(C)):4 >>;
+from_sb32(<< C:8, "-" >>     ) -> << (sb322c(C)):2 >>;
+from_sb32(<< C:8, Rest/bitstring >>) -> 
+    << (sb322c(C)):5, (from_sb32(Rest))/bitstring >>;
+from_sb32(<< >>) -> 
+    << >>.
+
+c2sb32(I) when 0  =< I, I =< 9  -> $0 + I;
+c2sb32(I) when 10 =< I, I =< 31 -> $A + I - 10.
+
+sb322c(I) when $0 =< I, I =< $9 -> I - $0;
+sb322c(I) when $A =< I, I =< $V -> I - $A + 10.
     
 
 encode_test() ->

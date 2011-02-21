@@ -1,7 +1,41 @@
 -module(sext_eqc).
 
+-ifdef(EQC).
+
 -compile(export_all).
 -include_lib("eqc/include/eqc.hrl").
+
+
+sext_test_() ->
+    N = 1000,
+    {timeout, 60,
+     [
+      fun()   -> run(N, prop_encode,      fun prop_encode/0) end
+      , fun() -> run(N, prop_sort,        fun prop_sort/0) end
+      , fun() -> run(N, prop_encode_sb32, fun prop_encode_sb32/0) end
+      , fun() -> run(N, prop_sort_sb32,   fun prop_sort_sb32/0) end
+     ]}.
+
+run() ->
+    run(good_number_of_tests()).
+
+good_number_of_tests() ->
+    1000.
+
+run(Num) ->
+    [
+     run  (Num, prop_encode     , fun prop_encode/0)
+     , run(Num, prop_sort       , fun prop_encode/0)
+     , run(Num, prop_encode_sb32, fun prop_encode_sb32/0)
+     , run(Num, prop_sort_sb32  , fun prop_sort_sb32/0)
+    ].
+
+run(Num, Lbl, F) ->
+    io:fwrite(user, "EQC test: ~p (~p)... ", [Lbl, Num]),
+    Res = eqc:quickcheck(eqc:numtests(Num, F())),
+    io:fwrite(user, "-> ~p~n", [Res]).
+
+
 
 prop_negbits() ->
     ?FORALL(B, abin(),
@@ -24,6 +58,15 @@ prop_sort() ->
 			   comp(X1,X2) == comp_i(T1,T2))
 	       end).
 
+prop_sort_sb32() ->
+    ?FORALL({T1,T2}, {term(), term()},
+	       begin
+		   {X1,X2} = {sext:encode_sb32(T1), sext:encode_sb32(T2)},
+		   collect(size(term_to_binary({T1,T2})),
+			   comp(X1,X2) == comp_i(T1,T2))
+	       end).
+
+
 prop_sort_fs() ->
     ?FORALL({R1,R2}, {pos_float(),pos_float()},
 	    begin
@@ -43,6 +86,10 @@ prop_sort_neg_fs() ->
 prop_encode() ->
     ?FORALL(T, term(),
 	    sext:decode(sext:encode(T)) == T).
+
+prop_encode_sb32() ->
+    ?FORALL(T, term(),
+	    sext:decode_sb32(sext:encode_sb32(T)) == T).
 
 prop_encode_neg_fs() ->
     ?FORALL(T, neg_float(),
@@ -151,3 +198,5 @@ neg_float() ->
 norm(F) when is_float(F) ->
     <<G/float>> = <<F/float>>,
     G.
+
+-endif.
