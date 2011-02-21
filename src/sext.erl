@@ -125,7 +125,22 @@ prefix(X) when is_atom(X)      -> encode_atom(X).
 %% @end
 %%
 prefix_sb32(X) ->    
-    to_sb32(prefix(X)).
+    chop_prefix_tail(to_sb32(prefix(X))).
+
+%% Must chop of the pad character and the last encoded unit (which, if pad
+%% characters are present, is not a whole byte)
+%%
+chop_prefix_tail(Bin) ->
+    Sz = byte_size(Bin),
+    Sz6 = Sz-7, Sz4 = Sz - 5, Sz3 = Sz - 4, Sz1 = Sz - 2,
+    case Bin of
+	<< P:Sz6/binary, _, "------" >> -> P;
+	<< P:Sz4/binary, _, "----"   >> -> P;
+	<< P:Sz3/binary, _, "---"    >> -> P;
+	<< P:Sz1/binary, _, "-"      >> -> P;
+	_ -> Bin
+    end.
+
 
 %% @spec decode(B::binary()) -> term()
 %% @doc Decodes a binary generated using the function {@link sext:encode/1}.
