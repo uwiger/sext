@@ -32,6 +32,8 @@
 -export([encode/1, decode/1]).
 -export([encode_sb32/1, decode_sb32/1]).
 -export([prefix/1]).
+-export([prefix_sb32/1]).
+-export([to_sb32/1, from_sb32/1]).
 
 -define(negbig   , 8).
 -define(neg4     , 9).
@@ -126,7 +128,14 @@ prefix(X) when is_binary(X)    -> prefix_binary(X);
 prefix(X) when is_bitstring(X) -> prefix_bitstring(X);
 prefix(X) when is_atom(X)      -> encode_atom(X).
 
-    
+%% @spec prefix_sb32(X::term()) -> binary()
+%% @doc Generates an sb32-encoded binary for prefix matching.
+%% This is similar to {@link prefix/1}, but generates a prefix for binaries
+%% encoded with {@link encode_sb32/1}, rather than {@link encode/1}.
+%% @end
+%%
+prefix_sb32(X) ->    
+    to_sb32(prefix(X)).
 
 %% @spec decode(B::binary()) -> term()
 %% @doc Decodes a binary generated using the function {@link sext:encode/1}.
@@ -747,19 +756,24 @@ get_max(I, W, Max) when I > Max ->
 get_max(_, W, Max) ->
     {W, Max}.
     
+%% @spec to_sb32(Bits::bitstring()) -> binary()
+%% @doc Converts a bitstring into an sb-encoded bitstring
+%%
 %% sb32 (Sortable base32) is a variant of RFC3548, slightly rearranged to 
 %% preserve the lexical sorting properties. Base32 was chosen to avoid 
 %% filename-unfriendly characters. Also important is that the padding 
 %% character be less than any character in the alphabet
 %%
 %% sb32 alphabet:
-%%
+%% <pre>
 %% 0 0     6 6     12 C     18 I     24 O     30 U
 %% 1 1     7 7     13 D     19 J     25 P     31 V
 %% 2 2     8 8     14 E     20 K     26 Q  (pad) -
 %% 3 3     9 9     15 F     21 L     27 R
 %% 4 4    10 A     16 G     22 M     28 S
 %% 5 5    11 B     17 H     23 N     29 T
+%% </pre>
+%% @end
 %%
 to_sb32(Bits) when is_bitstring(Bits) ->
     Sz = bit_size(Bits),
@@ -787,6 +801,12 @@ encode_pad(1) -> <<"----">>;
 encode_pad(4) -> <<"---">>;
 encode_pad(2) -> <<"-">>.
 
+%% @from_sb32(Bits::bitstring()) -> bitstring()
+%% @doc Converts from an sb32-encoded bitstring into a 'normal' bitstring
+%%
+%% This function is the reverse of {@link to_sb32/1}.
+%% @end
+%%
 from_sb32(<< C:8, "------" >>) -> << (sb322c(C)):3 >>;
 from_sb32(<< C:8, "----" >>  ) -> << (sb322c(C)):1 >>;
 from_sb32(<< C:8, "---" >>   ) -> << (sb322c(C)):4 >>;

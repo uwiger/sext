@@ -33,6 +33,13 @@ of term_to_binary() that respected the ordering semantics of Erlang terms.
 
 
 
+A new addition is support for 'sb32' encoding. This is my own version of 
+Base32 encoding, with a slightly different alphabet, in order to preserve 
+sorting properties while generating octet strings that are perfectly safe
+to use in file names.
+
+
+
 <h1>2. Specification</h1>
 
 

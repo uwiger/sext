@@ -12,6 +12,11 @@ in which a C routine is used to hook into the sorting logic of TC.
 I thought a more generic solution would be to be able to have a version
 of term_to_binary() that respected the ordering semantics of Erlang terms.
 
+A new addition is support for 'sb32' encoding. This is my own version of 
+Base32 encoding, with a slightly different alphabet, in order to preserve 
+sorting properties while generating octet strings that are perfectly safe
+to use in file names.
+
 <h1>2. Specification</h1>
 
 <h2>2.1 Type tags</h2>
