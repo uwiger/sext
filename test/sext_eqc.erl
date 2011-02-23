@@ -24,12 +24,16 @@
 
 sext_test_() ->
     N = 1000,
+    X = 100,
     {timeout, 60,
      [
       fun()   -> run(N, prop_encode,      fun prop_encode/0) end
+      , fun() -> run(N, prop_prefix_equiv,fun prop_prefix_equiv/0) end
       , fun() -> run(N, prop_sort,        fun prop_sort/0) end
       , fun() -> run(N, prop_encode_sb32, fun prop_encode_sb32/0) end
       , fun() -> run(N, prop_sort_sb32,   fun prop_sort_sb32/0) end
+      , fun() -> run(X, prop_is_prefix1,  fun prop_is_prefix1/0) end
+      , fun() -> run(X, prop_is_prefix2,  fun prop_is_prefix2/0) end
      ]}.
 
 run() ->
@@ -39,11 +43,15 @@ good_number_of_tests() ->
     1000.
 
 run(Num) ->
+    X = Num div 2,
     [
      run  (Num, prop_encode     , fun prop_encode/0)
+     , run(Num, prop_prefix_equiv,fun prop_prefix_equiv/0)
      , run(Num, prop_sort       , fun prop_encode/0)
      , run(Num, prop_encode_sb32, fun prop_encode_sb32/0)
      , run(Num, prop_sort_sb32  , fun prop_sort_sb32/0)
+     , run(X, prop_is_prefix1,  fun prop_is_prefix1/0)
+     , run(X, prop_is_prefix2,  fun prop_is_prefix2/0)
     ].
 
 run(Num, Lbl, F) ->
@@ -107,6 +115,29 @@ prop_encode_sb32() ->
     ?FORALL(T, term(),
 	    sext:decode_sb32(sext:encode_sb32(T)) == T).
 
+prop_prefix_equiv() ->
+    ?FORALL(T, term(),
+	    sext:encode(T) == sext:prefix(T)).
+
+prop_is_prefix1() ->
+    ?FORALL({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
+			      positions(Tp) > 0),wild()},
+	    ?LET(P, choose(1, positions(T)),
+		 begin
+		     Pfx = sext:prefix(make_wild(T,P,W)),
+		     true = is_prefix(Pfx, sext:encode(T))
+		 end)).
+
+prop_is_prefix2() ->
+    ?FORALL({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
+			      positions(Tp) > 2), wild()},
+	    ?LET(P, choose(2, positions(T)),
+		 begin
+		     {Pfx1,Pfx2} = {sext:prefix(make_wild(T,P,W)),
+				    sext:prefix(make_wild(T,P-1,W))},
+		     true = is_prefix(Pfx2, Pfx1)
+		 end)).
+
 prop_encode_neg_fs() ->
     ?FORALL(T, neg_float(),
 	    sext:decode(sext:encode(T)) == T).
@@ -153,26 +184,36 @@ comp_l([Ha|Ta],[Hb|Tb]) ->
 	    Other
     end.
 
-    
-
+is_prefix(A, B) ->
+    Sz = byte_size(A),
+    binary:longest_common_prefix([A,B]) == Sz.
+	
 
 
 term() ->
     ?SIZED(Size,term(Size)).
 
+term(0) ->
+    oneof(simple_types());
 term(Size) ->
     % You need ?LAZY for recursive generators!
     ?LAZY(oneof(
-	    [int(),
-	     pos_float(),
-	     neg_float(),
-	     anatom(),
-	     % Don't make lists and tuples EXACTLY Size long
-	     list(Size,term(Size div 3)),
-	     ?LET(L,list(Size,term(Size div 3)),list_to_tuple(L)),
-	     astring(Size),
-	     abin(),
-	     abitstr()])).
+	    simple_types() ++
+		[
+		 %% Don't make lists and tuples EXACTLY Size long
+		 alist(Size),
+		 non_proper_list(Size),
+		 atuple(Size),
+		 astring(Size)])).
+
+simple_types() ->
+    [int(),
+     pos_float(),
+     neg_float(),
+     anatom(),
+     abin(),
+     abitstr()].
+
 
 big() ->
     ?LET({X,M}, {nat(), pos()},
@@ -185,15 +226,28 @@ pos() ->
     ?SUCHTHAT(N,nat(),N>0).
 
 % Set the Size just for list generation.
+
+list_n(Length, G) ->
+    [G || _ <- lists:seq(1,Length)].
+
+alist() ->
+    ?SIZED(Size, alist(Size)).
+
+alist(Size) ->
+    list(Size,term(Size div 3)).
+
 list(Size,G) ->
     ?SIZED(S,resize(Size,list(resize(S,G)))).
+
+atuple(Size) ->
+    ?LET(L, alist(Size), list_to_tuple(L)).
 
 anatom() ->
     oneof([a,b,c,aa,bb,cc]).
 
 astring(0) -> "";
 astring(Size) ->
-    list(choose($A,$z)).
+    list(Size, choose($A,$z)).
 
 abin() ->
     ?LET(L, list(choose(0,255)), list_to_binary(L)).
@@ -214,5 +268,94 @@ neg_float() ->
 norm(F) when is_float(F) ->
     <<G/float>> = <<F/float>>,
     G.
+
+non_proper_list() ->
+    ?SIZED(Size, non_proper_list(Size)).
+
+non_proper_list(Size) ->
+    ?LET(Len, ?SUCHTHAT(Len1, nat(), Len1 > 1),
+	 non_proper_n(Len, term(Size div 3))).
+
+non_proper_n(N, G) ->
+    make_non_proper([G || _ <- lists:seq(1,N)]).
+
+make_non_proper([A,B]) -> [A|B];
+make_non_proper([A])   -> [A];
+make_non_proper([A|B]) -> [A|make_non_proper(B)];
+make_non_proper([])    -> [].
+
+
+prefixable_term() ->
+    ?SIZED(Size, prefixable_term(Size)).
+
+prefixable_term(Size) ->
+    oneof([non_empty_tuple(Size),
+	   non_empty_list(Size)]).
+
+non_empty_tuple(Size) ->
+    ?LET(L, non_empty_list(Size),
+	 list_to_tuple(L)).
+
+non_empty_list() ->
+    ?SIZED(Size, non_empty_list(Size)).
+
+non_empty_list(Size) ->
+    ?LET(Len, ?SUCHTHAT(I, nat(), I > 0),
+	 list_n(Len, term(Size div 3))).
+
+positions(T) ->
+    positions(T, 0).
+
+positions(T, Acc) when is_tuple(T) ->
+    positions(tuple_to_list(T), Acc);
+positions([H|T], Acc) ->
+    positions(T, positions(H) + Acc);
+positions([], Acc) ->
+    Acc;
+positions(_, Acc) ->
+    Acc+1.
+
+make_wild(T, P, W) when P > 0 ->
+    if is_tuple(T) ->
+	    {Res,_} = make_wild1(tuple_to_list(T), P, W, []),
+	    list_to_tuple(Res);
+       is_list(T) ->
+	    {Res,_} = make_wild1(T, P, W, []),
+	    Res
+    end.
+
+make_wild1(L, 0, _, Acc) ->
+    {lists:reverse(Acc) ++ L, 0};
+make_wild1(T, P, W, Acc) when not(is_list(T)) ->
+    if P == 1 ->
+	    {lists:reverse(Acc) ++ W, 0};
+       true ->
+	    {lists:reverse(Acc) ++ T, P-1}
+    end;
+make_wild1([_|T], 1, W, Acc) ->
+    {lists:reverse(Acc) ++ [W|T], 0};
+make_wild1([H|T], P, W, Acc) ->
+    if is_tuple(H) ->
+	    {H1,P1} = make_wild1(tuple_to_list(H), P, W, []),
+	    make_wild1(T, P1, W, [list_to_tuple(H1)|Acc]);
+       is_list(H) ->
+	    {H1,P1} = make_wild1(H, P, W, []),
+	    make_wild1(T, P1, W, [H1|Acc]);
+       true ->
+	    make_wild1(T, P-1, W, [H|Acc])
+    end;
+make_wild1([], P, _W, Acc) ->
+    {lists:reverse(Acc), P}.
+	    
+	    
+    
+
+
+wild() ->
+    oneof(['_','$1','$9999']).
+
+lists_replace(L, P, V) when P > 0, P =< length(L) ->
+    {L1, [_|L2]} = lists:split(P-1, L),
+    L1 ++ [V] ++ L2.
 
 -endif.

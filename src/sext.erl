@@ -34,8 +34,11 @@
 -define(port     , 14).
 -define(pid      , 15).
 -define(tuple    , 16).
--define(list     , 17).
--define(binary   , 18).
+-define(list , 17).
+-define(binary, 18).
+%% -define(nil      , 19).
+%% -define(list     , 20).
+%% -define(binary   , 21).
 
 -define(IMAX1, 16#ffffFFFFffffFFFF).
 
@@ -108,15 +111,25 @@ encode_sb32(Term) ->
 %% </ul>
 %% @end
 %%
-prefix(X) when is_tuple(X)     -> prefix_tuple(X);
-prefix(X) when is_list(X)      -> prefix_list(X);
-prefix(X) when is_pid(X)       -> encode_pid(X);
-prefix(X) when is_port(X)      -> encode_port(X);
-prefix(X) when is_reference(X) -> encode_ref(X);
-prefix(X) when is_number(X)    -> encode_number(X);
-prefix(X) when is_binary(X)    -> prefix_binary(X);
-prefix(X) when is_bitstring(X) -> prefix_bitstring(X);
-prefix(X) when is_atom(X)      -> encode_atom(X).
+prefix(X) ->
+    {_, P} = enc_prefix(X),
+    P.
+	
+enc_prefix(X) when is_tuple(X)     -> prefix_tuple(X);
+enc_prefix(X) when is_list(X)      -> prefix_list(X);
+enc_prefix(X) when is_pid(X)       -> {false, encode_pid(X)};
+enc_prefix(X) when is_port(X)      -> {false, encode_port(X)};
+enc_prefix(X) when is_reference(X) -> {false, encode_ref(X)};
+enc_prefix(X) when is_number(X)    -> {false, encode_number(X)};
+enc_prefix(X) when is_binary(X)    -> prefix_binary(X);
+enc_prefix(X) when is_bitstring(X) -> prefix_bitstring(X);
+enc_prefix(X) when is_atom(X) ->
+    case is_wild(X) of
+	true ->
+	    {true, <<>>};
+	false ->
+	    {false, encode_atom(X)}
+    end.
 
 %% @spec prefix_sb32(X::term()) -> binary()
 %% @doc Generates an sb32-encoded binary for prefix matching.
@@ -184,23 +197,37 @@ encode_tuple_elems(P, Sz, T, Acc) when P =< Sz ->
 encode_tuple_elems(_, _, _, Acc) ->
     Acc.
 
-prefix_tuple_elems(['_'|_], Acc) ->
-    Acc;
-prefix_tuple_elems([E, '_'|_], Acc) ->
-    P = prefix(E),
-    <<Acc/binary, P/binary>>;
-prefix_tuple_elems([E], Acc) ->
-    P = prefix(E),
-    <<Acc/binary, P/binary>>;
+prefix_tuple_elems([A|T], Acc) when is_atom(A) ->
+    case is_wild(A) of
+	true ->
+	    {true, Acc};
+	false ->
+	    E = encode(A),
+	    prefix_tuple_elems(T, <<Acc/binary, E/binary>>)
+    end;
+%% prefix_tuple_elems([E, '_'|_], Acc) ->
+%%     P = prefix(E),
+%%     {true, <<Acc/binary, P/binary>>};
+%% prefix_tuple_elems([E], Acc) ->
+%%     P = prefix(E),
+%%     <<Acc/binary, P/binary>>;
 prefix_tuple_elems([H|T], Acc) ->
-    E = encode(H),
-    prefix_tuple_elems(T, <<Acc/binary, E/binary>>);
+    case enc_prefix(H) of
+	{true, P} ->
+	    {true, <<Acc/binary, P/binary>>};
+	{false, E} ->
+	    prefix_tuple_elems(T, <<Acc/binary, E/binary>>)
+    end;
 prefix_tuple_elems([], Acc) ->
-    Acc.
+    {false, Acc}.
 
+%% encode_list([]) ->
+%%     <<?nil>>;
 encode_list(L) ->
     encode_list_elems(L, <<?list>>).
 
+%% prefix_list([]) ->
+%%     {false, <<?nil>>};
 prefix_list(L) ->
     prefix_list_elems(L, <<?list>>).
 
@@ -210,16 +237,18 @@ encode_binary(B)    ->
     <<?binary:8, Enc/binary>>.
 
 prefix_binary(B) ->
-    Enc = prefix_bin_elems(B),
-    <<?binary:8, Enc/binary>>.
+    %% Enc = prefix_bin_elems(B),
+    Enc = encode_bin_elems(B),
+    {false, <<?binary:8, Enc/binary>>}.
 
 encode_bitstring(B) ->
     Enc = encode_bits_elems(B),
     <<?binary:8, Enc/binary>>.
 
 prefix_bitstring(B) ->
-    Enc = prefix_bits_elems(B),
-    <<?binary:8, Enc/binary>>.
+    %% Enc = prefix_bits_elems(B),
+    Enc = encode_bits_elems(B),
+    {false, <<?binary:8, Enc/binary>>}.
 
 encode_pid(P) ->
     PBin = term_to_binary(P),
@@ -397,22 +426,61 @@ encode_big1(I, Acc) ->
 
 
 
-encode_list_elems([], Acc) -> <<Acc/binary, 0>>;
+encode_list_elems([], Acc) ->
+    <<Acc/binary, 2, 0>>;
+encode_list_elems(E, Acc) when not(is_list(E)) ->
+    %% improper list
+    <<Acc/binary, 1, (encode(E))/binary>>;
 encode_list_elems([H|T], Acc) ->
     Enc = encode(H),
-    encode_list_elems(T, <<Acc/binary, Enc/binary>>).
+    encode_list_elems(T, <<Acc/binary, 2, Enc/binary>>).
 
-prefix_list_elems([], Acc)    ->  Acc;
-prefix_list_elems(['_'], Acc) ->  Acc;
-prefix_list_elems([H|'_'], Acc) ->
-    P = prefix(H),
-    <<Acc/binary, P/binary>>;
-prefix_list_elems([H,'_'|_], Acc) ->
-    P = prefix(H),
-    <<Acc/binary, P/binary>>;
+%% prefix_list_elems([], Acc)    ->  {false, <<Acc/binary, ?nil>>};
+prefix_list_elems([], Acc) ->
+    {false, <<Acc/binary, 2, 0>>};
+prefix_list_elems(E, Acc) when not(is_list(E)) ->
+    case is_wild(E) of
+	true ->
+	    {true, Acc};
+	false ->
+	    {Bool, P} = enc_prefix(E),
+	    {Bool, <<Acc/binary, 1, P/binary>>}
+    end;
+%% prefix_list_elems(['_'], Acc) ->  Acc;
 prefix_list_elems([H|T], Acc) ->
-    E = encode(H),
-    prefix_list_elems(T, <<Acc/binary, E/binary>>).
+    case enc_prefix(H) of
+	{true, P} ->
+	    {true, <<Acc/binary, 2, P/binary>>};
+	{false, E} ->
+	    prefix_list_elems(T, <<Acc/binary, 2, E/binary>>)
+    end.
+%% prefix_list_elems([H,'_'|_], Acc) ->
+%%     P = prefix(H),
+%%     <<Acc/binary, P/binary>>;
+%% prefix_list_elems([H|T], Acc) ->
+%%     E = encode(H),
+%%     prefix_list_elems(T, <<Acc/binary, E/binary>>).
+
+is_wild('_') ->
+    true;
+is_wild(A) when is_atom(A) ->
+    case atom_to_list(A) of
+	"\$" ++ S ->
+	    try begin 
+		    _ = list_to_integer(S),
+		    true
+		end
+	    catch
+		error:_ ->
+		    false
+	    end;
+	_ ->
+	    false
+    end;
+is_wild(_) ->
+    false.
+
+			
 
 
 
@@ -422,9 +490,11 @@ encode_bin_elems(B) ->
     Pad = 8 - (size(B) rem 8),
     << (<< <<1:1, B1:8>> || <<B1>> <= B >>)/bitstring, 0:Pad, 8 >>.
 
-prefix_bin_elems(B) ->
-    Stuffed = << <<1:1, B1:8>> || <<B1>> <= B >>,
-    trunc_bin_pfx(Stuffed).
+%% prefix_bin_elems(<<>>) ->
+%%     <<8>>;
+%% prefix_bin_elems(B) ->
+%%     Stuffed = << <<1:1, B1:8>> || <<B1>> <= B >>,
+%%     trunc_bin_pfx(Stuffed).
 
 trunc_bin_pfx(Stuffed) ->
     BitSz = bit_size(Stuffed),
@@ -516,11 +586,14 @@ decode_next(<<?pid, Rest/binary>>) -> decode_pid(Rest);
 decode_next(<<?port, Rest/binary>>) -> decode_port(Rest);
 decode_next(<<?reference,Rest/binary>>) -> decode_ref(Rest);
 decode_next(<<?tuple,Sz:32, Rest/binary>>) -> decode_tuple(Sz,Rest);
+%% decode_next(<<?nil, Rest/binary>>) -> {[], Rest};
+%% decode_next(<<?old_list, Rest/binary>>) -> decode_list(Rest);
 decode_next(<<?list, Rest/binary>>) -> decode_list(Rest);
 decode_next(<<?negbig, Rest/binary>>) -> decode_neg_big(Rest);
 decode_next(<<?posbig, Rest/binary>>) -> decode_pos_big(Rest);
 decode_next(<<?neg4, I:31, F:1, Rest/binary>>) -> decode_neg(I,F,Rest);
 decode_next(<<?pos4, I:31, F:1, Rest/binary>>) -> decode_pos(I,F,Rest);
+%% decode_next(<<?old_binary, Rest/binary>>) -> decode_binary(Rest);
 decode_next(<<?binary, Rest/binary>>) -> decode_binary(Rest).
 
 decode_atom(B) ->
@@ -539,11 +612,28 @@ decode_tuple(N, Elems, Acc) ->
 decode_list(Elems) ->
     decode_list(Elems, []).
 
-decode_list(<<0, Rest/binary>>, Acc) ->
+decode_list(<<2, 0, Rest/binary>>, Acc) ->
     {lists:reverse(Acc), Rest};
+decode_list(<<2, Next/binary>>, Acc) ->
+    {Term, Rest} = decode_next(Next),
+    decode_list(Rest, [Term|Acc]);
+decode_list(<<1, Next/binary>>, Acc) ->
+    {Term, Rest} = decode_next(Next),
+    {lists:reverse(Acc) ++ Term, Rest};
+decode_list(<<0, Rest/binary>>, Acc) ->
+    {mk_tail(lists:reverse(Acc)), Rest};
 decode_list(Elems, Acc) ->
     {Term, Rest} = decode_next(Elems),
     decode_list(Rest, [Term|Acc]).
+
+mk_tail([A,B]) ->
+    [A|B];
+mk_tail([A]) ->
+    [A];
+mk_tail([A|B]) ->
+    [A|mk_tail(B)].
+
+
 
 decode_pid(Bin) ->
     {Name, Rest} = decode_binary(Bin),
