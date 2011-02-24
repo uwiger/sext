@@ -93,14 +93,19 @@ subtypes, to facilitate a reasonably efficient representation:
   <td>16</td>
  </tr>
  <tr>
-  <td>reference</td>
+  <td>list</td>
   <td>Obj of type list()</td>
   <td>17</td>
  </tr>
  <tr>
-  <td>reference</td>
+  <td>binary</td>
   <td>Obj of type binary()</td>
   <td>18</td>
+ </tr>
+ <tr>
+  <td>bin_tail</td>
+  <td>Improper-tail marker followed by binary or bitstring</td>
+  <td>19</td>
  </tr>
 </table>
 
@@ -113,7 +118,17 @@ in the tuple individually encoded.
 <h2>2.3 Lists</h2>
 
 Lists are encoded as the list tag, followed by each element in the list
-individually encoded, followed by a zero (1 byte).
+individually encoded, followed by the number 2 (1 byte).
+
+Improper lists, e.g. `[1,2|3]', have the number 1 inserted before the improper 
+tail. Since this also indicates the last element in the list, no end byte 
+is needed. This ensures that it sorts *before* any corresponding proper list,
+as long as the improper tail is not a binary (binaries are greater than the 
+missing 'cons', or list, cell).
+
+Improper lists that have a binary or bitstring as 'tail', e.g. `[1,2|<<1>>]',
+have a ?bin_tail (code 19) inserted before the tail. This ensures that it 
+sorts after a corresponding proper list.
 
 <h2>2.4 Binaries and bitstrings</h2>
 

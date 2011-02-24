@@ -34,8 +34,9 @@
 -define(port     , 14).
 -define(pid      , 15).
 -define(tuple    , 16).
--define(list , 17).
--define(binary, 18).
+-define(list     , 17).
+-define(binary   , 18).
+-define(bin_tail , 19).
 %% -define(nil      , 19).
 %% -define(list     , 20).
 %% -define(binary   , 21).
@@ -427,32 +428,38 @@ encode_big1(I, Acc) ->
 
 
 encode_list_elems([], Acc) ->
-    <<Acc/binary, 2, 0>>;
+    <<Acc/binary, 2>>;
+encode_list_elems(B, Acc) when is_bitstring(B) ->
+    %% improper list
+    <<Acc/binary, ?bin_tail, (encode(B))/binary>>;
 encode_list_elems(E, Acc) when not(is_list(E)) ->
     %% improper list
     <<Acc/binary, 1, (encode(E))/binary>>;
 encode_list_elems([H|T], Acc) ->
     Enc = encode(H),
-    encode_list_elems(T, <<Acc/binary, 2, Enc/binary>>).
+    encode_list_elems(T, <<Acc/binary, Enc/binary>>).
 
 %% prefix_list_elems([], Acc)    ->  {false, <<Acc/binary, ?nil>>};
 prefix_list_elems([], Acc) ->
-    {false, <<Acc/binary, 2, 0>>};
+    {false, <<Acc/binary, 2>>};
 prefix_list_elems(E, Acc) when not(is_list(E)) ->
     case is_wild(E) of
 	true ->
 	    {true, Acc};
 	false ->
+	    Marker = if is_bitstring(E) -> ?bin_tail;
+			true -> 1
+		     end,
 	    {Bool, P} = enc_prefix(E),
-	    {Bool, <<Acc/binary, 1, P/binary>>}
+	    {Bool, <<Acc/binary, Marker, P/binary>>}
     end;
 %% prefix_list_elems(['_'], Acc) ->  Acc;
 prefix_list_elems([H|T], Acc) ->
     case enc_prefix(H) of
 	{true, P} ->
-	    {true, <<Acc/binary, 2, P/binary>>};
+	    {true, <<Acc/binary, P/binary>>};
 	{false, E} ->
-	    prefix_list_elems(T, <<Acc/binary, 2, E/binary>>)
+	    prefix_list_elems(T, <<Acc/binary, E/binary>>)
     end.
 %% prefix_list_elems([H,'_'|_], Acc) ->
 %%     P = prefix(H),
@@ -612,16 +619,19 @@ decode_tuple(N, Elems, Acc) ->
 decode_list(Elems) ->
     decode_list(Elems, []).
 
-decode_list(<<2, 0, Rest/binary>>, Acc) ->
+decode_list(<<2, Rest/binary>>, Acc) ->
     {lists:reverse(Acc), Rest};
-decode_list(<<2, Next/binary>>, Acc) ->
-    {Term, Rest} = decode_next(Next),
-    decode_list(Rest, [Term|Acc]);
-decode_list(<<1, Next/binary>>, Acc) ->
+%% decode_list(<<2, Next/binary>>, Acc) ->
+%%     {Term, Rest} = decode_next(Next),
+%%     decode_list(Rest, [Term|Acc]);
+decode_list(<<?bin_tail, Next/binary>>, Acc) ->
+    %% improper list, binary tail
     {Term, Rest} = decode_next(Next),
     {lists:reverse(Acc) ++ Term, Rest};
-decode_list(<<0, Rest/binary>>, Acc) ->
-    {mk_tail(lists:reverse(Acc)), Rest};
+decode_list(<<1, Next/binary>>, Acc) ->
+    %% improper list, non-binary tail
+    {Term, Rest} = decode_next(Next),
+    {lists:reverse(Acc) ++ Term, Rest};
 decode_list(Elems, Acc) ->
     {Term, Rest} = decode_next(Elems),
     decode_list(Rest, [Term|Acc]).
