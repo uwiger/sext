@@ -8,11 +8,29 @@ A sortable serialization library
 This library offers a serialization format (a la term_to_binary()) that 
 preserves the Erlang term order.
 
-__Authors:__ Ulf Wiger ([`ulf.wiger@erlang-consulting.com`](mailto:ulf.wiger@erlang-consulting.com)).
+__Authors:__ Ulf Wiger ([`ulf.wiger@erlang-solutions.com`](mailto:ulf.wiger@erlang-solutions.com)).
 
 A sortable serialization library
 This library offers a serialization format (a la term_to_binary()) that 
 preserves the Erlang term order.
+
+
+<pre>
+Copyright 2010 Erlang Solutions Ltd.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+</pre>
+
 
 
 
@@ -30,6 +48,13 @@ in which a C routine is used to hook into the sorting logic of TC.
 
 I thought a more generic solution would be to be able to have a version
 of term_to_binary() that respected the ordering semantics of Erlang terms.
+
+
+
+A new addition is support for 'sb32' encoding. This is my own version of 
+Base32 encoding, with a slightly different alphabet, in order to preserve 
+sorting properties while generating octet strings that are perfectly safe
+to use in file names.
 
 
 
@@ -185,7 +210,7 @@ subtypes, to facilitate a reasonably efficient representation:
 
 <tr>
 
-<td>reference</td>
+<td>list</td>
 
 
 <td>Obj of type list()</td>
@@ -198,13 +223,26 @@ subtypes, to facilitate a reasonably efficient representation:
 
 <tr>
 
-<td>reference</td>
+<td>binary</td>
 
 
 <td>Obj of type binary()</td>
 
 
 <td>18</td>
+
+</tr>
+
+
+<tr>
+
+<td>bin_tail</td>
+
+
+<td>Improper-tail marker followed by binary or bitstring</td>
+
+
+<td>19</td>
 
 </tr>
 
@@ -233,7 +271,21 @@ in the tuple individually encoded.
 
 
 Lists are encoded as the list tag, followed by each element in the list
-individually encoded, followed by a zero (1 byte).
+individually encoded, followed by the number 2 (1 byte).
+
+
+
+Improper lists, e.g. `[1,2|3]`, have the number 1 inserted before the improper 
+tail. Since this also indicates the last element in the list, no end byte 
+is needed. This ensures that it sorts *before* any corresponding proper list,
+as long as the improper tail is not a binary (binaries are greater than the 
+missing 'cons', or list, cell).
+
+
+
+Improper lists that have a binary or bitstring as 'tail', e.g. `[1,2|<<1>>]`,
+have a ?bin_tail (code 19) inserted before the tail. This ensures that it 
+sorts after a corresponding proper list.
 
 
 
