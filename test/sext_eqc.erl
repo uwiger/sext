@@ -33,6 +33,10 @@ sext_test_() ->
       , fun() -> t(run(N, prop_sort_sb32, fun prop_sort_sb32/0)) end
       , fun() -> t(run(N, prop_is_prefix1, fun prop_is_prefix1/0)) end
       , fun() -> t(run(N, prop_is_prefix2, fun prop_is_prefix2/0)) end
+      , fun() -> t(run(N, prop_encode_hex, fun prop_encode_hex/0)) end
+      , fun() -> t(run(N, prop_sort_hex, fun prop_sort_hex/0)) end
+      , fun() -> t(run(N, prop_is_prefix_hex1, fun prop_is_prefix_hex1/0)) end
+      , fun() -> t(run(N, prop_is_prefix_hex2, fun prop_is_prefix_hex2/0)) end
       , fun() -> t(run(N,prop_non_proper_sorts,fun prop_non_proper_sorts/0)) end
      ]}.
 
@@ -94,6 +98,14 @@ prop_sort_sb32() ->
                         comp(X1,X2) == comp_i(T1,T2))
             end).
 
+prop_sort_hex() ->
+    ?FORALL({T1,T2}, {term(), term()},
+            begin
+                {X1,X2} = {sext:encode_hex(T1), sext:encode_hex(T2)},
+                collect(size(term_to_binary({T1,T2})),
+                        comp(X1,X2) == comp_i(T1,T2))
+            end).
+
 
 prop_sort_fs() ->
     ?FORALL({R1,R2}, {pos_float(),pos_float()},
@@ -117,6 +129,10 @@ prop_encode_sb32() ->
     ?FORALL(T, term(),
             sext:decode_sb32(sext:encode_sb32(T)) == T).
 
+prop_encode_hex() ->
+    ?FORALL(T, term(),
+            sext:decode_hex(sext:encode_hex(T)) == T).
+
 prop_prefix_equiv() ->
     ?FORALL(T, term(),
             sext:encode(T) == sext:prefix(T)).
@@ -137,6 +153,25 @@ prop_is_prefix2() ->
                  begin
                      {Pfx1,Pfx2} = {sext:prefix(make_wild(T,P,W)),
                                     sext:prefix(make_wild(T,P-1,W))},
+                     true = is_prefix(Pfx2, Pfx1)
+                 end)).
+
+prop_is_prefix_hex1() ->
+    ?FORALL({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
+                              positions(Tp) > 0),wild()},
+            ?LET(P, choose(1, positions(T)),
+                 begin
+                     Pfx = sext:prefix_hex(make_wild(T,P,W)),
+                     true = is_prefix(Pfx, sext:encode_hex(T))
+                 end)).
+
+prop_is_prefix_hex2() ->
+    ?FORALL({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
+                              positions(Tp) > 2), wild()},
+            ?LET(P, choose(2, positions(T)),
+                 begin
+                     {Pfx1,Pfx2} = {sext:prefix_hex(make_wild(T,P,W)),
+                                    sext:prefix_hex(make_wild(T,P-1,W))},
                      true = is_prefix(Pfx2, Pfx1)
                  end)).
 

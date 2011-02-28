@@ -20,10 +20,13 @@
 -module(sext).
 
 -export([encode/1, decode/1]).
+-export([encode_hex/1, decode_hex/1]).
 -export([encode_sb32/1, decode_sb32/1]).
 -export([prefix/1]).
+-export([prefix_hex/1]).
 -export([prefix_sb32/1]).
 -export([to_sb32/1, from_sb32/1]).
+-export([to_hex/1, from_hex/1]).
 
 -define(negbig   , 8).
 -define(neg4     , 9).
@@ -71,7 +74,7 @@ encode(X) when is_bitstring(X) -> encode_bitstring(X);
 encode(X) when is_atom(X)      -> encode_atom(X).
 
 %% @spec encode_sb32(Term::any()) -> binary()
-%% @doc Encodes any Erlang term into a binary.
+%% @doc Encodes any Erlang term into an sb32-encoded binary.
 %% This is similar to {@link encode/1}, but produces an octet string that 
 %% can be used without escaping in file names (containing only the characters
 %% 0..9, A..V and '-'). The sorting properties are preserved.
@@ -82,6 +85,20 @@ encode(X) when is_atom(X)      -> encode_atom(X).
 %%
 encode_sb32(Term) ->
     to_sb32(encode(Term)).
+
+%% @spec encode_hex(Term::any()) -> binary()
+%% @doc Encodes any Erlang term into a hex-encoded binary.
+%% This is similar to {@link encode/1}, but produces an octet string that 
+%% can be used without escaping in file names (containing only the characters
+%% 0..9 and A..F). The sorting properties are preserved.
+%%
+%% Note: The encoding used is regular hex-encoding, with the proviso that only
+%% capital letters are used (mixing upper- and lowercase characters would break
+%% the sorting property).
+%% @end
+%%
+encode_hex(Term) ->
+    to_hex(encode(Term)).
 
 %% @spec prefix(X::term()) -> binary()
 %% @doc Encodes a binary for prefix matching of similar encoded terms.
@@ -141,6 +158,15 @@ enc_prefix(X) when is_atom(X) ->
 prefix_sb32(X) ->    
     chop_prefix_tail(to_sb32(prefix(X))).
 
+%% @spec prefix_hex(X::term()) -> binary()
+%% @doc Generates a hex-encoded binary for prefix matching.
+%% This is similar to {@link prefix/1}, but generates a prefix for binaries
+%% encoded with {@link encode_hex/1}, rather than {@link encode/1}.
+%% @end
+%%
+prefix_hex(X) ->
+    to_hex(prefix(X)).
+
 %% Must chop of the pad character and the last encoded unit (which, if pad
 %% characters are present, is not a whole byte)
 %%
@@ -173,6 +199,9 @@ decode(Elems) ->
 %%
 decode_sb32(Data) ->
     decode(from_sb32(Data)).
+
+decode_hex(Data) ->
+    decode(from_hex(Data)).
 
 
 pp(none) -> "<none>";
@@ -906,7 +935,7 @@ encode_pad(1) -> <<"----">>;
 encode_pad(4) -> <<"---">>;
 encode_pad(2) -> <<"-">>.
 
-%% @from_sb32(Bits::bitstring()) -> bitstring()
+%% @spec from_sb32(Bits::bitstring()) -> bitstring()
 %% @doc Converts from an sb32-encoded bitstring into a 'normal' bitstring
 %%
 %% This function is the reverse of {@link to_sb32/1}.
@@ -926,7 +955,29 @@ c2sb32(I) when 10 =< I, I =< 31 -> $A + I - 10.
 
 sb322c(I) when $0 =< I, I =< $9 -> I - $0;
 sb322c(I) when $A =< I, I =< $V -> I - $A + 10.
-    
+
+%% @spec to_hex(Bin::binary()) -> binary()
+%% @doc Converts a binary into a hex-encoded binary
+%% This is conventional hex encoding, with the proviso that
+%% only capital letters are used, e.g. `0..9A..F'.
+%% @end
+to_hex(Bin) ->
+    << << (nib2hex(N)):8 >> || <<N:4>> <= Bin >>.
+
+%% @spec from_hex(Bin::binary()) -> binary()
+%% @doc Converts from a hex-encoded binary into a 'normal' binary
+%%
+%% This function is the reverse of {@link to_hex/1}.
+%%
+from_hex(Bin) ->
+    << << (hex2nib(H)):4 >> || <<H:8>> <= Bin >>.
+
+nib2hex(N) when  0 =< N, N =< 9 -> $0 + N;
+nib2hex(N) when 10 =< N, N =< 15-> $A + N - 10. 
+
+hex2nib(C) when $0 =< C, C =< $9 -> C - $0;
+hex2nib(C) when $A =< C, C =< $F -> C - $A + 10.
+
 
 encode_test() ->
     L = test_list(),
