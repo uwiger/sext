@@ -68,14 +68,6 @@ run(Num, Lbl, F) ->
     Res.
 
 
-
-prop_negbits() ->
-    ?FORALL(B, abin(),
-            begin
-                {B1,<<>>} = sext:decode_neg_binary(sext:encode_neg_bits(B)),
-                B == B1
-            end).
-
 %% In this property, the ?IMPLIES condition guards us against the
 %% unfortunate case where {1, 1.0} will have a strict ordering when
 %% encoded (in order to satisfy the encode property), but not in Erlang
