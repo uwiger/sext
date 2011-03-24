@@ -24,14 +24,12 @@ This is conventional hex encoding, with the proviso that
 only capital letters are used, e.g.</td></tr><tr><td valign="top"><a href="#to_sb32-1">to_sb32/1</a></td><td>Converts a bitstring into an sb-encoded bitstring.</td></tr></table>
 
 
-<a name="functions"></a>
 
 
-<h2>Function Details</h2>
+<h2><a name="functions">Function Details</a></h2>
 
 
 <a name="decode-1"></a>
-
 
 <h3>decode/1</h3>
 
@@ -39,13 +37,13 @@ only capital letters are used, e.g.</td></tr><tr><td valign="top"><a href="#to_s
 
 
 
-<tt>decode(B::binary()) -> term()</tt>
+`decode(B::binary()) -> term()`
+<br></br>
 
 
 
-Decodes a binary generated using the function [`sext:encode/1`](sext.md#encode-1).
-<a name="decode_hex-1"></a>
 
+Decodes a binary generated using the function [`sext:encode/1`](sext.md#encode-1).<a name="decode_hex-1"></a>
 
 <h3>decode_hex/1</h3>
 
@@ -55,9 +53,7 @@ Decodes a binary generated using the function [`sext:encode/1`](sext.md#encode-1
 
 `decode_hex(Data) -> any()`
 
-
 <a name="decode_sb32-1"></a>
-
 
 <h3>decode_sb32/1</h3>
 
@@ -69,9 +65,7 @@ Decodes a binary generated using the function [`sext:encode/1`](sext.md#encode-1
 
 
 
-Decodes a binary generated using the function [`encode_sb32/1`](#encode_sb32-1).
-<a name="encode-1"></a>
-
+Decodes a binary generated using the function [`encode_sb32/1`](#encode_sb32-1).<a name="encode-1"></a>
 
 <h3>encode/1</h3>
 
@@ -79,16 +73,16 @@ Decodes a binary generated using the function [`encode_sb32/1`](#encode_sb32-1).
 
 
 
-<tt>encode(T::term()) -> binary()</tt>
+`encode(T::term()) -> binary()`
+<br></br>
+
 
 
 
 Encodes any Erlang term into a binary.
 The lexical sorting properties of the encoded binary match those of the
 original Erlang term. That is, encoded terms sort the same way as the
-original terms would.
-<a name="encode_hex-1"></a>
-
+original terms would.<a name="encode_hex-1"></a>
 
 <h3>encode_hex/1</h3>
 
@@ -96,7 +90,9 @@ original terms would.
 
 
 
-<tt>encode_hex(Term::any()) -> binary()</tt>
+`encode_hex(Term::any()) -> binary()`
+<br></br>
+
 
 
 
@@ -109,9 +105,7 @@ can be used without escaping in file names (containing only the characters
 
 Note: The encoding used is regular hex-encoding, with the proviso that only
 capital letters are used (mixing upper- and lowercase characters would break
-the sorting property).
-<a name="encode_sb32-1"></a>
-
+the sorting property).<a name="encode_sb32-1"></a>
 
 <h3>encode_sb32/1</h3>
 
@@ -119,7 +113,9 @@ the sorting property).
 
 
 
-<tt>encode_sb32(Term::any()) -> binary()</tt>
+`encode_sb32(Term::any()) -> binary()`
+<br></br>
+
 
 
 
@@ -131,9 +127,7 @@ can be used without escaping in file names (containing only the characters
 0..9, A..V and '-'). The sorting properties are preserved.
 
 Note: The encoding used is inspired by the base32 encoding described in
-RFC3548, but uses a different alphabet in order to preserve the sort order.
-<a name="from_hex-1"></a>
-
+RFC3548, but uses a different alphabet in order to preserve the sort order.<a name="from_hex-1"></a>
 
 <h3>from_hex/1</h3>
 
@@ -141,7 +135,9 @@ RFC3548, but uses a different alphabet in order to preserve the sort order.
 
 
 
-<tt>from_hex(Bin::binary()) -> binary()</tt>
+`from_hex(Bin::binary()) -> binary()`
+<br></br>
+
 
 
 
@@ -150,9 +146,7 @@ RFC3548, but uses a different alphabet in order to preserve the sort order.
 Converts from a hex-encoded binary into a 'normal' binary
 
 This function is the reverse of [`to_hex/1`](#to_hex-1).
-
 <a name="from_sb32-1"></a>
-
 
 <h3>from_sb32/1</h3>
 
@@ -160,7 +154,9 @@ This function is the reverse of [`to_hex/1`](#to_hex-1).
 
 
 
-<tt>from_sb32(Bits::<a href="#type-bitstring">bitstring()</a>) -> <a href="#type-bitstring">bitstring()</a></tt>
+`from_sb32(Bits::[bitstring()](#type-bitstring)) -> [bitstring()](#type-bitstring)`
+<br></br>
+
 
 
 
@@ -168,9 +164,7 @@ This function is the reverse of [`to_hex/1`](#to_hex-1).
 
 Converts from an sb32-encoded bitstring into a 'normal' bitstring
 
-This function is the reverse of [`to_sb32/1`](#to_sb32-1).
-<a name="prefix-1"></a>
-
+This function is the reverse of [`to_sb32/1`](#to_sb32-1).<a name="prefix-1"></a>
 
 <h3>prefix/1</h3>
 
@@ -178,7 +172,9 @@ This function is the reverse of [`to_sb32/1`](#to_sb32-1).
 
 
 
-<tt>prefix(X::term()) -> binary()</tt>
+`prefix(X::term()) -> binary()`
+<br></br>
+
 
 
 
@@ -212,10 +208,7 @@ first element is 1.
 
 * For all other data types, the prefix is the same as the encoded term.
 
-
-
 <a name="prefix_hex-1"></a>
-
 
 <h3>prefix_hex/1</h3>
 
@@ -223,15 +216,15 @@ first element is 1.
 
 
 
-<tt>prefix_hex(X::term()) -> binary()</tt>
+`prefix_hex(X::term()) -> binary()`
+<br></br>
+
 
 
 
 Generates a hex-encoded binary for prefix matching.
 This is similar to [`prefix/1`](#prefix-1), but generates a prefix for binaries
-encoded with [`encode_hex/1`](#encode_hex-1), rather than [`encode/1`](#encode-1).
-<a name="prefix_sb32-1"></a>
-
+encoded with [`encode_hex/1`](#encode_hex-1), rather than [`encode/1`](#encode-1).<a name="prefix_sb32-1"></a>
 
 <h3>prefix_sb32/1</h3>
 
@@ -239,15 +232,15 @@ encoded with [`encode_hex/1`](#encode_hex-1), rather than [`encode/1`](#encode-1
 
 
 
-<tt>prefix_sb32(X::term()) -> binary()</tt>
+`prefix_sb32(X::term()) -> binary()`
+<br></br>
+
 
 
 
 Generates an sb32-encoded binary for prefix matching.
 This is similar to [`prefix/1`](#prefix-1), but generates a prefix for binaries
-encoded with [`encode_sb32/1`](#encode_sb32-1), rather than [`encode/1`](#encode-1).
-<a name="to_hex-1"></a>
-
+encoded with [`encode_sb32/1`](#encode_sb32-1), rather than [`encode/1`](#encode-1).<a name="to_hex-1"></a>
 
 <h3>to_hex/1</h3>
 
@@ -255,15 +248,15 @@ encoded with [`encode_sb32/1`](#encode_sb32-1), rather than [`encode/1`](#encode
 
 
 
-<tt>to_hex(Bin::binary()) -> binary()</tt>
+`to_hex(Bin::binary()) -> binary()`
+<br></br>
+
 
 
 
 Converts a binary into a hex-encoded binary
 This is conventional hex encoding, with the proviso that
-only capital letters are used, e.g. `0..9A..F`.
-<a name="to_sb32-1"></a>
-
+only capital letters are used, e.g. `0..9A..F`.<a name="to_sb32-1"></a>
 
 <h3>to_sb32/1</h3>
 
@@ -271,7 +264,9 @@ only capital letters are used, e.g. `0..9A..F`.
 
 
 
-<tt>to_sb32(Bits::<a href="#type-bitstring">bitstring()</a>) -> binary()</tt>
+`to_sb32(Bits::[bitstring()](#type-bitstring)) -> binary()`
+<br></br>
+
 
 
 
@@ -298,4 +293,4 @@ sb32 alphabet:
 </pre>
 
 
-_Generated by EDoc, Feb 28 2011, 13:47:55._
+_Generated by EDoc, Mar 25 2011, 00:02:47._
