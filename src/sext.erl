@@ -189,7 +189,6 @@ chop_prefix_tail(Bin) ->
 decode(Elems) ->
     case decode_next(Elems) of
 	{Term, <<>>} -> Term;
-	{Term, []} -> Term;
 	Other -> erlang:error(badarg, Other)
     end.
 
