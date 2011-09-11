@@ -267,7 +267,6 @@ encode_binary(B)    ->
     <<?binary:8, Enc/binary>>.
 
 prefix_binary(B) ->
-    %% Enc = prefix_bin_elems(B),
     Enc = encode_bin_elems(B),
     {false, <<?binary:8, Enc/binary>>}.
 
@@ -276,7 +275,6 @@ encode_bitstring(B) ->
     <<?binary:8, Enc/binary>>.
 
 prefix_bitstring(B) ->
-    %% Enc = prefix_bits_elems(B),
     Enc = encode_bits_elems(B),
     {false, <<?binary:8, Enc/binary>>}.
 
@@ -516,39 +514,11 @@ is_wild(A) when is_atom(A) ->
 is_wild(_) ->
     false.
 
-			
-
-
-
 encode_bin_elems(<<>>) ->
     <<8>>;
 encode_bin_elems(B) ->
     Pad = 8 - (size(B) rem 8),
     << (<< <<1:1, B1:8>> || <<B1>> <= B >>)/bitstring, 0:Pad, 8 >>.
-
-%% prefix_bin_elems(<<>>) ->
-%%     <<8>>;
-%% prefix_bin_elems(B) ->
-%%     Stuffed = << <<1:1, B1:8>> || <<B1>> <= B >>,
-%%     trunc_bin_pfx(Stuffed).
-
-trunc_bin_pfx(Stuffed) ->
-    BitSz = bit_size(Stuffed),
-    case BitSz rem 8 of
-	0 ->
-	    Stuffed;
-	Rem ->
-	    PSz = (BitSz - Rem) div 8,
-	    <<P:PSz/binary, _:Rem>> = Stuffed,
-	    P
-    end.
-    
-
-%% encode_neg_bin_elems(<<>>) ->
-%%     <<247>>;   % 16#ff - 8
-%% encode_neg_bin_elems(B) ->
-%%     Pad = 8 - (size(B) rem 8),
-%%     << (<< <<0:1, (16#ff-B1):8>> || <<B1>> <= B >>)/bitstring, 1:Pad, 247 >>.
 
 encode_neg_bits(<<>>) ->
     <<247>>;
@@ -598,11 +568,6 @@ encode_bits_elems(B) ->
     TailPad = 8-TailSz,
     Pad = 8 - ((TailSz + TailPad + bit_size(Padded) + 1) rem 8),
     <<Padded/bitstring, 1:1, TailBits/bitstring, 0:TailPad, 0:Pad, TailSz:8>>.
-
-prefix_bits_elems(B) ->	
-    {Padded, TailBits} = pad_bytes(B),
-    Stuffed = <<Padded/binary, 1:1, TailBits/bitstring>>,
-    trunc_bin_pfx(Stuffed).
 
 pad_bytes(Bin) ->
     pad_bytes(Bin, <<>>).
@@ -664,15 +629,6 @@ decode_list(<<1, Next/binary>>, Acc) ->
 decode_list(Elems, Acc) ->
     {Term, Rest} = decode_next(Elems),
     decode_list(Rest, [Term|Acc]).
-
-mk_tail([A,B]) ->
-    [A|B];
-mk_tail([A]) ->
-    [A];
-mk_tail([A|B]) ->
-    [A|mk_tail(B)].
-
-
 
 decode_pid(Bin) ->
     {Name, Rest} = decode_binary(Bin),
