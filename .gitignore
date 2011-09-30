@@ -1,0 +1,7 @@
+deps/
+.eunit/
+ebin/
+*~
+*/*~
+erl_crash.dump
+current_counterexample.eqc
