@@ -59,7 +59,7 @@
 %% @spec encode(T::term()) -> binary()
 %% @doc Encodes any Erlang term into a binary.
 %% The lexical sorting properties of the encoded binary match those of the
-%% original Erlang term. That is, encoded terms sort the same way as the 
+%% original Erlang term. That is, encoded terms sort the same way as the
 %% original terms would.
 %% @end
 %%
@@ -75,7 +75,7 @@ encode(X) when is_atom(X)      -> encode_atom(X).
 
 %% @spec encode_sb32(Term::any()) -> binary()
 %% @doc Encodes any Erlang term into an sb32-encoded binary.
-%% This is similar to {@link encode/1}, but produces an octet string that 
+%% This is similar to {@link encode/1}, but produces an octet string that
 %% can be used without escaping in file names (containing only the characters
 %% 0..9, A..V and '-'). The sorting properties are preserved.
 %%
@@ -88,7 +88,7 @@ encode_sb32(Term) ->
 
 %% @spec encode_hex(Term::any()) -> binary()
 %% @doc Encodes any Erlang term into a hex-encoded binary.
-%% This is similar to {@link encode/1}, but produces an octet string that 
+%% This is similar to {@link encode/1}, but produces an octet string that
 %% can be used without escaping in file names (containing only the characters
 %% 0..9 and A..F). The sorting properties are preserved.
 %%
@@ -102,28 +102,30 @@ encode_hex(Term) ->
 
 %% @spec prefix(X::term()) -> binary()
 %% @doc Encodes a binary for prefix matching of similar encoded terms.
-%% Lists and tuples can be prefixed by using the '_' marker, similarly
-%% to Erlang match specifications. For example:
+%% Lists and tuples can be prefixed by using the <code>'_'</code> marker,
+%% similarly to Erlang match specifications. For example:
 %% <ul>
-%%  <li>`prefix({1,2,'_','_'})' will result in a binary that is the same as 
-%%    the first part of any encoded 4-tuple with the first two elements being
-%%    1 and 2. The prefix algorithm will search for the first '_', and treat
-%%    all following elements as if they were '_'.</li>
-%%  <li>`prefix([1,2|'_'])' will result in a binary that is the same as the
-%%    first part of any encoded list where the first two elements are 1 and 2.
-%%    `prefix([1,2,'_'])' will give the same result, as the prefix pattern
-%%    is the same for all lists starting with [1,2|...].</li>
-%%  <li>`prefix(Binary)' will result in a binary that is the same as the encoded
-%%    version of Binary, except that, instead of padding and terminating, the
-%%    encoded binary is truncated to the longest byte-aligned binary. The same
-%%    is done for bitstrings.</li>
-%%  <li>`prefix({1,[1,2|'_'],'_'})' will prefix-encode the second element, and
-%%    let it end the resulting binary. This prefix will match any 3-tuple where
-%%    the first element is 1 and the second element is a list where the first
-%%    two elements are 1 and 2.</li>
-%%  <li>`prefix([1,[1|'_']|'_'])' will result in a prefix that matches all lists
-%%    where the first element is 1 and the second element is a list where the 
-%%    first element is 1.</li>
+%%  <li><code>prefix({1,2,'_','_'})</code> will result in a binary that is
+%%    the same as the first part of any encoded 4-tuple with the first two
+%%    elements being 1 and 2. The prefix algorithm will search for the
+%%    first <code>'_'</code>, and treat all following elements as if they
+%%    were <code>'_'</code>.</li>
+%%  <li><code>prefix([1,2|'_'])</code> will result in a binary that is the
+%%    same as the first part of any encoded list where the first two elements
+%%    are 1 and 2. <code>prefix([1,2,'_'])</code> will give the same result,
+%%    as the prefix pattern is the same for all lists starting with
+%%    `[1,2|...]'.</li>
+%%  <li>`prefix(Binary)' will result in a binary that is the same as the
+%%    encoded version of Binary, except that, instead of padding and
+%%    terminating, the encoded binary is truncated to the longest byte-aligned
+%%    binary. The same is done for bitstrings.</li>
+%%  <li><code>prefix({1,[1,2|'_'],'_'})</code> will prefix-encode the second
+%%    element, and let it end the resulting binary. This prefix will match
+%%    any 3-tuple where the first element is 1 and the second element is a
+%%    list where the first two elements are 1 and 2.</li>
+%%  <li><code>prefix([1,[1|'_']|'_'])</code> will result in a prefix that
+%%    matches all lists where the first element is 1 and the second element is
+%%    a list where the first element is 1.</li>
 %%  <li>For all other data types, the prefix is the same as the encoded term.
 %%    </li>
 %% </ul>
@@ -132,7 +134,7 @@ encode_hex(Term) ->
 prefix(X) ->
     {_, P} = enc_prefix(X),
     P.
-	
+
 enc_prefix(X) when is_tuple(X)     -> prefix_tuple(X);
 enc_prefix(X) when is_list(X)      -> prefix_list(X);
 enc_prefix(X) when is_pid(X)       -> {false, encode_pid(X)};
