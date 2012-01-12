@@ -225,7 +225,9 @@ comp_l([Ha|Ta],[Hb|Tb]) ->
             comp_l(Ta, Tb);
         Other ->
             Other
-    end.
+    end;
+comp_l(A, B) -> % A or B was an improper list
+    comp_i(A, B).
 
 is_prefix(A, B) ->
     Sz = byte_size(A),
