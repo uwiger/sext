@@ -19,7 +19,7 @@
 %% @end
 -module(sext).
 
--export([encode/1, decode/1]).
+-export([encode/1, decode/1, decode_next/1]).
 -export([encode_hex/1, decode_hex/1]).
 -export([encode_sb32/1, decode_sb32/1]).
 -export([prefix/1]).
@@ -582,7 +582,13 @@ pad_bytes(Bits, Acc) when is_bitstring(Bits) ->
 %% ------------------------------------------------------
 %% Decoding routines
 
-%% decode_next([?number,N|Rest]) -> {N, Rest};
+-spec decode_next(binary()) -> {any(), binary()}.
+%% @spec decode_next(Bin) -> {N, Rest}
+%% @doc Decode a binary stream, returning the next decoded term and the stream remainder
+%%
+%% This function will raise an exception if the beginning of `Bin' is not a valid
+%% sext-encoded term.
+%% @end
 decode_next(<<?atom,Rest/binary>>) -> decode_atom(Rest);
 decode_next(<<?pid, Rest/binary>>) -> decode_pid(Rest);
 decode_next(<<?port, Rest/binary>>) -> decode_port(Rest);

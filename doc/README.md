@@ -1,19 +1,13 @@
 
 
-<h1>The sext application</h1>
+#The sext application#
 
-The sext application
-====================
-A sortable serialization library
-This library offers a serialization format (a la term_to_binary()) that 
-preserves the Erlang term order.
 
 __Authors:__ Ulf Wiger ([`ulf.wiger@erlang-solutions.com`](mailto:ulf.wiger@erlang-solutions.com)).
 
 A sortable serialization library
 This library offers a serialization format (a la term_to_binary()) that 
 preserves the Erlang term order.
-
 
 <pre>
 Copyright 2010 Erlang Solutions Ltd.
@@ -33,9 +27,7 @@ limitations under the License.
 
 
 
-
-<h1>1. Introduction</h1>
-
+#1. Introduction#
 
 
 
@@ -58,14 +50,12 @@ to use in file names.
 
 
 
-<h1>2. Specification</h1>
+#2. Specification#
 
 
 
 
-
-<h2>2.1 Type tags</h2>
-
+##2.1 Type tags##
 
 
 
@@ -77,79 +67,78 @@ subtypes, to facilitate a reasonably efficient representation:
 
 
 <table border="1">
-<tr align="left">
-<th>Type</th>
-<th>Description</th>
-<th>Tag</th>
-</tr>
-<tr>
-<td>negbig</td>
-<td>Negative bignum</td>
-<td>8</td>
-</tr>
-<tr>
-<td>neg4</td>
-<td>Negative 31-bit integer</td>
-<td>9</td>
-</tr>
-<tr>
-<td>pos4</td>
-<td>Positive 31-bit integer</td>
-<td>10</td>
-</tr>
-<tr>
-<td>posbig</td>
-<td>Positive bignum</td>
-<td>11</td>
-</tr>
-<tr>
-<td>atom</td>
-<td>Obj of type atom()</td>
-<td>12</td>
-</tr>
-<tr>
-<td>reference</td>
-<td>Obj of type reference()</td>
-<td>13</td>
-</tr>
-<tr>
-<td>port</td>
-<td>Obj of type port()</td>
-<td>14</td>
-</tr>
-<tr>
-<td>pid</td>
-<td>Obj of type pid()</td>
-<td>15</td>
-</tr>
-<tr>
-<td>reference</td>
-<td>Obj of type list()</td>
-<td>16</td>
-</tr>
-<tr>
-<td>list</td>
-<td>Obj of type list()</td>
-<td>17</td>
-</tr>
-<tr>
-<td>binary</td>
-<td>Obj of type binary()</td>
-<td>18</td>
-</tr>
-<tr>
-<td>bin_tail</td>
-<td>Improper-tail marker followed by binary or bitstring</td>
-<td>19</td>
-</tr>
+ <tr align="left">
+  <th>Type</th>
+  <th>Description</th>
+  <th>Tag</th>
+ </tr>
+ <tr>
+  <td>negbig</td>
+  <td>Negative bignum</td>
+  <td>8</td>
+ </tr>
+ <tr>
+  <td>neg4</td>
+  <td>Negative 31-bit integer</td>
+  <td>9</td>
+ </tr>
+ <tr>
+  <td>pos4</td>
+  <td>Positive 31-bit integer</td>
+  <td>10</td>
+ </tr>
+ <tr>
+  <td>posbig</td>
+  <td>Positive bignum</td>
+  <td>11</td>
+ </tr>
+ <tr>
+  <td>atom</td>
+  <td>Obj of type atom()</td>
+  <td>12</td>
+ </tr>
+ <tr>
+  <td>reference</td>
+  <td>Obj of type reference()</td>
+  <td>13</td>
+ </tr>
+ <tr>
+  <td>port</td>
+  <td>Obj of type port()</td>
+  <td>14</td>
+ </tr>
+ <tr>
+  <td>pid</td>
+  <td>Obj of type pid()</td>
+  <td>15</td>
+ </tr>
+ <tr>
+  <td>reference</td>
+  <td>Obj of type list()</td>
+  <td>16</td>
+ </tr>
+ <tr>
+  <td>list</td>
+  <td>Obj of type list()</td>
+  <td>17</td>
+ </tr>
+ <tr>
+  <td>binary</td>
+  <td>Obj of type binary()</td>
+  <td>18</td>
+ </tr>
+ <tr>
+  <td>bin_tail</td>
+  <td>Improper-tail marker followed by binary or bitstring</td>
+  <td>19</td>
+ </tr>
 </table>
 
 
 
 
 
-<h2>2.2 Tuples</h2>
-
+##2.2 Tuples##
 
 
 
@@ -160,8 +149,7 @@ in the tuple individually encoded.
 
 
 
-<h2>2.3 Lists</h2>
-
+##2.3 Lists##
 
 
 
@@ -185,8 +173,7 @@ sorts after a corresponding proper list.
 
 
 
-<h2>2.4 Binaries and bitstrings</h2>
-
+##2.4 Binaries and bitstrings##
 
 
 
@@ -195,12 +182,10 @@ A binary is basically a bitstring whose size is a multiple of 8. From a sorting
 perspective, binaries and bitstrings are both sorted as left-aligned bit 
 arrays.
 
-
 <pre>
 1> bitstring_to_list(<<11111111111:11>>).
 [56,<<7:3>>]
 </pre>
-
 
 
 
@@ -211,14 +196,12 @@ value is Bits, where Bits is the number of "remainder bits"; 8 if the original
 binary is 8-bit aligned.
 
 Example:
-
 <pre>
 2> sext:encode(<<1,2,3>>).
 <<18,128,192,160,96,8>>
 3> <<18, 1:1,1, 1:1,2, 1:1,3, 0:5, 8>>.
 <<18,128,192,160,96,8>>
 </pre>
-
 
 
 
@@ -237,14 +220,12 @@ The value of the last byte is the bit size of the remainder.
 
 Example:
 
-
 <pre>
 2> sext:encode(<<1,2,3,4:3>>).
 <<18,128,192,160,96,8>>
 3> <<18, 1:1,1, 1:1,2, 1:1,3, 1:1,4:3,0:5, 0:4, 3>>.
 <<18,128,192,160,96,8>>
 </pre>
-
 
 
 
@@ -256,8 +237,7 @@ remainder.
 
 
 
-<h2>2.5 Positive Numbers</h2>
-
+##2.5 Positive Numbers##
 
 
 
@@ -270,8 +250,7 @@ type tag).
 
 
 
-<h3>2.5.1 Positive small integers, pos4</h3>
-
+###2.5.1 Positive small integers, pos4##
 
 
 
@@ -282,8 +261,7 @@ where I is the integer value, and F is 1 if a fraction part follows;
 
 
 
-<h3>2.5.2 Positive large integers</h3>
-
+###2.5.2 Positive large integers##
 
 
 
@@ -292,7 +270,6 @@ Larger integers are converted to a byte string and then encoded like
 binaries (without the 'binary' type tag), followed by a byte signifying 
 whether a fraction part follows (1 if yes; 0 otherwise).
 
-
 <pre>
 Bytes = encode_big(I),
 << ?pos_big, Bytes/binary, F:8 >>
@@ -300,20 +277,16 @@ Bytes = encode_big(I),
 
 
 
-
-<h3>2.5.3 Fraction part of positive numbers</h3>
-
+###2.5.3 Fraction part of positive numbers##
 
 
 
 
 The representation of floating point numbers is based on the [IEEE 764 Binary 64 standard representation](http://en.wikipedia.org/wiki/Double_precision_floating-point_format). This is also the representation used by Erlang:
 
-
 <pre>
 <<Sign:1, Exp:11, Frac:52>> = <<F/float>>
 </pre>
-
 
 
 
@@ -323,21 +296,17 @@ the fraction part as a binary (without the binary tag).
 
 
 
-<h2>2.6 Negative Numbers</h2>
+##2.6 Negative Numbers##
 
 
 
 
-
-<h3>2.6.1 Small negative numbers</h3>
-
-
+###2.6.1 Small negative numbers##
 
 
 <pre>
 << ?neg4:8, IRep:31, F:1 >>
 </pre>
-
 
 
 
@@ -353,14 +322,12 @@ be 1 if there is no fraction part; 0 otherwise.
 
 
 
-<h3>2.6.2 Large negative numbers</h3>
-
+###2.6.2 Large negative numbers##
 
 
 
 
 Larger negative numbers are encoded as 
-
 
 <pre>
 {Words, Max} = get_max(-I),
@@ -371,7 +338,6 @@ WordsRep = 16#FFFFffff - Words,
 
 
 
-
 That is, get_max() figures out how many 64-bit words are needed to represent
 -I (the positive number), and also gives the maximum value that can be 
 represented in so many words. WordsRep in essence becomes a sub-subtag of 
@@ -379,8 +345,7 @@ the negative bignum.
 
 
 
-<h3>2.6.3 Fraction of negative numbers</h3>
-
+###2.6.3 Fraction of negative numbers##
 
 
 
@@ -397,8 +362,7 @@ is similarly inverted.
 
 
 
-<h2>2.7 Atoms</h2>
-
+##2.7 Atoms##
 
 
 
@@ -409,24 +373,21 @@ tag).
 
 
 
-<h2>2.8 References</h2>
-
+##2.8 References##
 
 
 
 
 The encoding of references is perhaps best described by the code:
 
-
 <pre>
 encode_ref(R) ->
-RBin = term_to_binary(R),
-<<131,114,_Len:16,100,NLen:16,Name:NLen/binary,Rest/binary>> = RBin,
-NameEnc = encode_bin_elems(Name),
-RestEnc = encode_bin_elems(Rest),
-<<?reference, NameEnc/binary, RestEnc/binary>>.
+    RBin = term_to_binary(R),
+    <<131,114,_Len:16,100,NLen:16,Name:NLen/binary,Rest/binary>> = RBin,
+    NameEnc = encode_bin_elems(Name),
+    RestEnc = encode_bin_elems(Rest),
+    <<?reference, NameEnc/binary, RestEnc/binary>>.
 </pre>
-
 
 
 
@@ -435,47 +396,40 @@ where encode_bin_elems(B) encodes the argument B the same way as a binary
 
 
 
-<h2>2.9 Ports</h2>
-
+##2.9 Ports##
 
 
 
 
 The encoding of ports is perhaps best described by the code:
-
 
 <pre>
 encode_port(P) ->
-PBin = term_to_binary(P),
-<<131,102,100,ALen:16,Name:ALen/binary,Rest:5/binary>> = PBin,
-NameEnc = encode_bin_elems(Name),
-<<?port, NameEnc/binary, Rest/binary>>.
+    PBin = term_to_binary(P),
+    <<131,102,100,ALen:16,Name:ALen/binary,Rest:5/binary>> = PBin,
+    NameEnc = encode_bin_elems(Name),
+    <<?port, NameEnc/binary, Rest/binary>>.
 </pre>
 
 
 
-
-<h2>2.10 Pids</h2>
-
+##2.10 Pids##
 
 
 
 
 The encoding of ports is perhaps best described by the code:
 
-
 <pre>
 encode_pid(P) ->
-PBin = term_to_binary(P),
-<<131,103,100,ALen:16,Name:ALen/binary,Rest:9/binary>> = PBin,
-NameEnc = encode_bin_elems(Name),
-<<?pid, NameEnc/binary, Rest/binary>>.
+    PBin = term_to_binary(P),
+    <<131,103,100,ALen:16,Name:ALen/binary,Rest:9/binary>> = PBin,
+    NameEnc = encode_bin_elems(Name),
+    <<?pid, NameEnc/binary, Rest/binary>>.
 </pre>
 
 
-
-<h2 class="indextitle">Modules</h2>
-
+##Modules##
 
 
 <table width="100%" border="0" summary="list of modules">

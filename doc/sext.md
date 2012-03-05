@@ -1,9 +1,6 @@
-Module sext
-===========
 
 
-<h1>Module sext</h1>
-
+#Module sext#
 * [Description](#description)
 * [Function Index](#index)
 * [Function Details](#functions)
@@ -13,31 +10,28 @@ Sortable serialization library.
 
 
 
-__Authors:__ Ulf Wiger ([`ulf.wiger@erlang-solutions.com`](mailto:ulf.wiger@erlang-solutions.com)).
+__Authors:__ Ulf Wiger ([`ulf.wiger@erlang-solutions.com`](mailto:ulf.wiger@erlang-solutions.com)).<a name="index"></a>
 
-<h2><a name="index">Function Index</a></h2>
+##Function Index##
 
 
-
-<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#decode-1">decode/1</a></td><td>Decodes a binary generated using the function <a href="sext.md#encode-1"><code>sext:encode/1</code></a>.</td></tr><tr><td valign="top"><a href="#decode_hex-1">decode_hex/1</a></td><td></td></tr><tr><td valign="top"><a href="#decode_sb32-1">decode_sb32/1</a></td><td>Decodes a binary generated using the function <a href="#encode_sb32-1"><code>encode_sb32/1</code></a>.</td></tr><tr><td valign="top"><a href="#encode-1">encode/1</a></td><td>Encodes any Erlang term into a binary.</td></tr><tr><td valign="top"><a href="#encode_hex-1">encode_hex/1</a></td><td>Encodes any Erlang term into a hex-encoded binary.</td></tr><tr><td valign="top"><a href="#encode_sb32-1">encode_sb32/1</a></td><td>Encodes any Erlang term into an sb32-encoded binary.</td></tr><tr><td valign="top"><a href="#from_hex-1">from_hex/1</a></td><td>Converts from a hex-encoded binary into a 'normal' binary.</td></tr><tr><td valign="top"><a href="#from_sb32-1">from_sb32/1</a></td><td>Converts from an sb32-encoded bitstring into a 'normal' bitstring.</td></tr><tr><td valign="top"><a href="#prefix-1">prefix/1</a></td><td>Encodes a binary for prefix matching of similar encoded terms.</td></tr><tr><td valign="top"><a href="#prefix_hex-1">prefix_hex/1</a></td><td>Generates a hex-encoded binary for prefix matching.</td></tr><tr><td valign="top"><a href="#prefix_sb32-1">prefix_sb32/1</a></td><td>Generates an sb32-encoded binary for prefix matching.</td></tr><tr><td valign="top"><a href="#to_hex-1">to_hex/1</a></td><td>Converts a binary into a hex-encoded binary
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#decode-1">decode/1</a></td><td>Decodes a binary generated using the function <a href="sext.md#encode-1"><code>sext:encode/1</code></a>.</td></tr><tr><td valign="top"><a href="#decode_hex-1">decode_hex/1</a></td><td></td></tr><tr><td valign="top"><a href="#decode_next-1">decode_next/1</a></td><td>Decode a binary stream, returning the next decoded term and the stream remainder.</td></tr><tr><td valign="top"><a href="#decode_sb32-1">decode_sb32/1</a></td><td>Decodes a binary generated using the function <a href="#encode_sb32-1"><code>encode_sb32/1</code></a>.</td></tr><tr><td valign="top"><a href="#encode-1">encode/1</a></td><td>Encodes any Erlang term into a binary.</td></tr><tr><td valign="top"><a href="#encode_hex-1">encode_hex/1</a></td><td>Encodes any Erlang term into a hex-encoded binary.</td></tr><tr><td valign="top"><a href="#encode_sb32-1">encode_sb32/1</a></td><td>Encodes any Erlang term into an sb32-encoded binary.</td></tr><tr><td valign="top"><a href="#from_hex-1">from_hex/1</a></td><td>Converts from a hex-encoded binary into a 'normal' binary.</td></tr><tr><td valign="top"><a href="#from_sb32-1">from_sb32/1</a></td><td>Converts from an sb32-encoded bitstring into a 'normal' bitstring.</td></tr><tr><td valign="top"><a href="#prefix-1">prefix/1</a></td><td>Encodes a binary for prefix matching of similar encoded terms.</td></tr><tr><td valign="top"><a href="#prefix_hex-1">prefix_hex/1</a></td><td>Generates a hex-encoded binary for prefix matching.</td></tr><tr><td valign="top"><a href="#prefix_sb32-1">prefix_sb32/1</a></td><td>Generates an sb32-encoded binary for prefix matching.</td></tr><tr><td valign="top"><a href="#to_hex-1">to_hex/1</a></td><td>Converts a binary into a hex-encoded binary
 This is conventional hex encoding, with the proviso that
 only capital letters are used, e.g.</td></tr><tr><td valign="top"><a href="#to_sb32-1">to_sb32/1</a></td><td>Converts a bitstring into an sb-encoded bitstring.</td></tr></table>
 
 
+<a name="functions"></a>
 
-
-<h2><a name="functions">Function Details</a></h2>
-
+##Function Details##
 
 <a name="decode-1"></a>
 
-<h3>decode/1</h3>
+###decode/1##
 
 
 
 
-
-`decode(B::binary()) -> term()`
+<pre>decode(B::binary()) -&gt; term()</pre>
 <br></br>
 
 
@@ -45,18 +39,34 @@ only capital letters are used, e.g.</td></tr><tr><td valign="top"><a href="#to_s
 
 Decodes a binary generated using the function [`sext:encode/1`](sext.md#encode-1).<a name="decode_hex-1"></a>
 
-<h3>decode_hex/1</h3>
-
+###decode_hex/1##
 
 
 
 
 `decode_hex(Data) -> any()`
 
-<a name="decode_sb32-1"></a>
+<a name="decode_next-1"></a>
 
-<h3>decode_sb32/1</h3>
+###decode_next/1##
 
+
+
+
+<pre>decode_next(X1::Bin) -&gt; {N, Rest}</pre>
+<br></br>
+
+
+
+
+
+
+Decode a binary stream, returning the next decoded term and the stream remainder
+
+This function will raise an exception if the beginning of `Bin` is not a valid
+sext-encoded term.<a name="decode_sb32-1"></a>
+
+###decode_sb32/1##
 
 
 
@@ -67,13 +77,12 @@ Decodes a binary generated using the function [`sext:encode/1`](sext.md#encode-1
 
 Decodes a binary generated using the function [`encode_sb32/1`](#encode_sb32-1).<a name="encode-1"></a>
 
-<h3>encode/1</h3>
+###encode/1##
 
 
 
 
-
-`encode(T::term()) -> binary()`
+<pre>encode(T::term()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -84,13 +93,12 @@ The lexical sorting properties of the encoded binary match those of the
 original Erlang term. That is, encoded terms sort the same way as the
 original terms would.<a name="encode_hex-1"></a>
 
-<h3>encode_hex/1</h3>
+###encode_hex/1##
 
 
 
 
-
-`encode_hex(Term::any()) -> binary()`
+<pre>encode_hex(Term::any()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -107,13 +115,12 @@ Note: The encoding used is regular hex-encoding, with the proviso that only
 capital letters are used (mixing upper- and lowercase characters would break
 the sorting property).<a name="encode_sb32-1"></a>
 
-<h3>encode_sb32/1</h3>
+###encode_sb32/1##
 
 
 
 
-
-`encode_sb32(Term::any()) -> binary()`
+<pre>encode_sb32(Term::any()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -129,13 +136,12 @@ can be used without escaping in file names (containing only the characters
 Note: The encoding used is inspired by the base32 encoding described in
 RFC3548, but uses a different alphabet in order to preserve the sort order.<a name="from_hex-1"></a>
 
-<h3>from_hex/1</h3>
+###from_hex/1##
 
 
 
 
-
-`from_hex(Bin::binary()) -> binary()`
+<pre>from_hex(Bin::binary()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -148,13 +154,12 @@ Converts from a hex-encoded binary into a 'normal' binary
 This function is the reverse of [`to_hex/1`](#to_hex-1).
 <a name="from_sb32-1"></a>
 
-<h3>from_sb32/1</h3>
+###from_sb32/1##
 
 
 
 
-
-`from_sb32(Bits::bitstring()) -> bitstring()`
+<pre>from_sb32(Bits::bitstring()) -&gt; bitstring()</pre>
 <br></br>
 
 
@@ -166,13 +171,12 @@ Converts from an sb32-encoded bitstring into a 'normal' bitstring
 
 This function is the reverse of [`to_sb32/1`](#to_sb32-1).<a name="prefix-1"></a>
 
-<h3>prefix/1</h3>
+###prefix/1##
 
 
 
 
-
-`prefix(X::term()) -> binary()`
+<pre>prefix(X::term()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -212,13 +216,12 @@ a list where the first element is 1.
 
 <a name="prefix_hex-1"></a>
 
-<h3>prefix_hex/1</h3>
+###prefix_hex/1##
 
 
 
 
-
-`prefix_hex(X::term()) -> binary()`
+<pre>prefix_hex(X::term()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -228,13 +231,12 @@ Generates a hex-encoded binary for prefix matching.
 This is similar to [`prefix/1`](#prefix-1), but generates a prefix for binaries
 encoded with [`encode_hex/1`](#encode_hex-1), rather than [`encode/1`](#encode-1).<a name="prefix_sb32-1"></a>
 
-<h3>prefix_sb32/1</h3>
+###prefix_sb32/1##
 
 
 
 
-
-`prefix_sb32(X::term()) -> binary()`
+<pre>prefix_sb32(X::term()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -244,13 +246,12 @@ Generates an sb32-encoded binary for prefix matching.
 This is similar to [`prefix/1`](#prefix-1), but generates a prefix for binaries
 encoded with [`encode_sb32/1`](#encode_sb32-1), rather than [`encode/1`](#encode-1).<a name="to_hex-1"></a>
 
-<h3>to_hex/1</h3>
+###to_hex/1##
 
 
 
 
-
-`to_hex(Bin::binary()) -> binary()`
+<pre>to_hex(Bin::binary()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -260,13 +261,12 @@ Converts a binary into a hex-encoded binary
 This is conventional hex encoding, with the proviso that
 only capital letters are used, e.g. `0..9A..F`.<a name="to_sb32-1"></a>
 
-<h3>to_sb32/1</h3>
+###to_sb32/1##
 
 
 
 
-
-`to_sb32(Bits::bitstring()) -> binary()`
+<pre>to_sb32(Bits::bitstring()) -&gt; binary()</pre>
 <br></br>
 
 
@@ -284,15 +284,11 @@ filename-unfriendly characters. Also important is that the padding
 character be less than any character in the alphabet
 
 sb32 alphabet:
-
 <pre>
-0 0     6 6     12 C     18 I     24 O     30 U
-1 1     7 7     13 D     19 J     25 P     31 V
-2 2     8 8     14 E     20 K     26 Q  (pad) -
-3 3     9 9     15 F     21 L     27 R
-4 4    10 A     16 G     22 M     28 S
-5 5    11 B     17 H     23 N     29 T
-</pre>
-
-
-_Generated by EDoc, Oct 5 2011, 16:48:44._
+  0 0     6 6     12 C     18 I     24 O     30 U
+  1 1     7 7     13 D     19 J     25 P     31 V
+  2 2     8 8     14 E     20 K     26 Q  (pad) -
+  3 3     9 9     15 F     21 L     27 R
+  4 4    10 A     16 G     22 M     28 S
+  5 5    11 B     17 H     23 N     29 T
+  </pre>
