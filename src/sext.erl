@@ -53,9 +53,6 @@
         end).
 %%-define(dbg(F,A),no_debug).
 
--include_lib("eunit/include/eunit.hrl").
-
-
 %% @spec encode(T::term()) -> binary()
 %% @doc Encodes any Erlang term into a binary.
 %% The lexical sorting properties of the encoded binary match those of the
@@ -942,6 +939,9 @@ hex2nib(C) when $0 =< C, C =< $9 -> C - $0;
 hex2nib(C) when $A =< C, C =< $F -> C - $A + 10.
 
 
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
 encode_test() ->
     L = test_list(),
     [{I,I} = {I,catch decode(encode(I))} || I <- L].
@@ -979,3 +979,5 @@ test_list() ->
      make_ref(),
      make_ref()|
      lists:sublist(erlang:ports(),1,2)].
+
+-endif.
