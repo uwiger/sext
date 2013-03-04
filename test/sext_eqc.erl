@@ -23,7 +23,7 @@
 -include_lib("eunit/include/eunit.hrl").
 
 sext_test_() ->
-    N = 1000,
+    N = 2000,
     {timeout, 60,
      [
       fun() -> t(run(N, prop_encode, fun prop_encode/0)) end
@@ -47,7 +47,7 @@ run() ->
     run(good_number_of_tests()).
 
 good_number_of_tests() ->
-    1000.
+    2000.
 
 run(Num) ->
     [
@@ -258,6 +258,7 @@ term(Size) ->
 
 simple_types() ->
     [int(),
+     big(),
      pos_float(),
      neg_float(),
      anatom(),
@@ -266,7 +267,10 @@ simple_types() ->
 
 big() ->
     ?LET({X,M}, {nat(), pos()},
-         (16#ffffFFFF + X) * M).
+         %% Multiply by the cube of `M'
+         %% to get the generator big enough.
+         %% Verified w/ `eqc_gen:sample/1'
+         (16#ffffFFFF + X) * (M * M * M)).
 
 neg_big() ->
     ?LET(B, big(), -B).
