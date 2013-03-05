@@ -28,6 +28,8 @@
 -export([to_sb32/1, from_sb32/1]).
 -export([to_hex/1, from_hex/1]).
 
+-export([legacy_encode_bignum/1]).
+
 -define(negbig   , 8).
 -define(neg4     , 9).
 -define(pos4     , 10).
@@ -422,14 +424,82 @@ encode_neg_int(I,R) when I < -16#7fFFffFF ->
 %%      RAdj = MaxR - Ri,
 %%     ?dbg("RAdj = ~p~n", [<<RAdj:Sz>>]),
 %%     encode_bits_elems(<<RAdj:Sz>>).
+legacy_encode_bignum(I) when is_integer(I), I > 16#7fffffff ->
+    Bl = encode_big1(I),
+    ?dbg("Bl = ~p~n", [Bl]),
+    Bb = list_to_binary(Bl),
+    ?dbg("Bb = ~p~n", [Bb]),
+    <<?posbig, (encode_bin_elems(Bb))/binary, 0:8>>.
 
 
 encode_big(I) ->
     Bl = encode_big1(I),
     ?dbg("Bl = ~p~n", [Bl]),
-    Bb = list_to_binary(Bl),
+    Bb = prepend_size(list_to_binary(Bl)),
     ?dbg("Bb = ~p~n", [Bb]),
     encode_bin_elems(Bb).
+
+prepend_size(B) ->
+    Sz = byte_size(B),
+    <<255, (encode_size(Sz))/binary, B/binary>>.
+
+remove_size_bits(<<255, T/binary>>) ->
+    {_, Rest} = untag_7bits(T, <<>>),
+    Rest;
+remove_size_bits(B) ->
+    %% legacy bignum
+    B.
+
+
+encode_size(I) when I > 127 ->
+    B = int_to_binary(I),
+    tag_7bits(B);
+    %% %% <<1:1, (I band 127):7, (encode_size(I bsr 7))/binary>>;
+    %% <<1:1, (H - 127):7, (encode_size(I bsr 8))/binary>>;
+encode_size(I) ->
+    <<I>>.
+
+tag_7bits(B) when bit_size(B) > 7 ->
+    <<H:7, T/bitstring>> = B,
+    <<1:1, H:7, (tag_7bits(T))/binary>>;
+tag_7bits(B) ->
+    Sz = bit_size(B),
+    <<I:Sz>> = B,
+    <<0:1, I:7>>.
+
+untag_7bits(<<1:1, H:7, T/binary>>, Acc) ->
+    untag_7bits(T, <<Acc/bitstring, H:7>>);
+untag_7bits(<<0:1, H:7, T/binary>>, Acc) ->
+    AccBits = bit_size(Acc),
+    HBits = 8 - (AccBits rem 8),
+    {<<Acc/bitstring, H:HBits>>, T}.
+
+
+int_to_binary(I) when I =< 16#ff -> <<I:8>>;
+int_to_binary(I) when I =< 16#ffff -> <<I:16>>;
+int_to_binary(I) when I =< 16#ffffff -> <<I:24>>;
+int_to_binary(I) when I =< 16#ffffffff -> <<I:32>>;
+int_to_binary(I) when I =< 16#ffffffffff -> <<I:40>>;
+int_to_binary(I) when I =< 16#ffffffffffff -> <<I:48>>;
+int_to_binary(I) when I =< 16#ffffffffffffff -> <<I:56>>;
+int_to_binary(I) when I =< 16#ffffffffffffffff -> <<I:64>>;
+int_to_binary(I) ->
+    %% Realm of the ridiculous
+    list_to_binary(
+      lists:dropwhile(fun(X) -> X==0 end, binary_to_list(<<I:256>>))).
+
+
+%% This function exists for documentation, but not used right now.
+%% It's the reverse of encode_size/1, used for encoding bignums.
+%%
+%% decode_size(<<1:1, _/bitstring>> = T) ->
+%%     {SzBin, Rest} = untag_7bits(T, <<>>),
+%%     Bits = bit_size(SzBin),
+%%     <<Sz:Bits>> = SzBin,
+%%     {Sz, Rest};
+%% decode_size(<<0:1, H:7, T/binary>>) ->
+%%     {H, T}.
+
 
 encode_big_neg(I) ->
     {Words, Max} = get_max(-I),
@@ -735,7 +805,8 @@ decode_pos(I, 1, Bin) ->	% float > 1
 
 decode_pos_big(Bin) ->
     ?dbg("decode_pos_big(~p)~n", [Bin]),
-    {Ib, Rest} = decode_binary(Bin),
+    {Ib0, Rest} = decode_binary(Bin),
+    Ib = remove_size_bits(Ib0),
     ?dbg("Ib = ~p~n", [Ib]),
     ISz = size(Ib) * 8,
     ?dbg("ISz = ~p~n", [ISz]),

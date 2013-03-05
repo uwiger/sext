@@ -27,6 +27,7 @@ sext_test_() ->
     {timeout, 60,
      [
       fun() -> t(run(N, prop_encode, fun prop_encode/0)) end
+      , fun() -> t(run(N, prop_decode_legacy_big, fun prop_decode_legacy_big/0)) end
       , fun() -> t(run(N, prop_prefix_equiv,fun prop_prefix_equiv/0))end
       , fun() -> t(run(N, prop_sort, fun prop_sort/0)) end
       , fun() -> t(run(N, prop_encode_sb32, fun prop_encode_sb32/0)) end
@@ -51,9 +52,12 @@ good_number_of_tests() ->
 
 run(Num) ->
     [
-     run (Num, prop_encode , fun prop_encode/0)
+     run  (Num, prop_encode , fun prop_encode/0)
+     , run(Num, prop_decode_legacy_big, fun prop_decode_legacy_big/0)
      , run(Num, prop_prefix_equiv,fun prop_prefix_equiv/0)
-     , run(Num, prop_sort , fun prop_encode/0)
+     %% , run(Num, prop_prefix_equiv,fun prop_prefix_equiv/0)
+     , run(Num, prop_sort , fun prop_sort/0)
+     , run(Num, prop_sort_big, fun prop_sort_big/0)
      , run(Num, prop_encode_sb32, fun prop_encode_sb32/0)
      , run(Num, prop_sort_sb32 , fun prop_sort_sb32/0)
      , run(Num, prop_is_prefix1, fun prop_is_prefix1/0)
@@ -76,6 +80,14 @@ run(Num, Lbl, F) ->
 %% values actually differ.
 prop_sort() ->
     ?FORALL({T1,T2}, {term(), term()},
+            begin
+                {X1,X2} = {sext:encode(T1), sext:encode(T2)},
+                collect(size(term_to_binary({T1,T2})),
+                        comp(X1,X2) == comp_i(T1,T2))
+            end).
+
+prop_sort_big() ->
+    ?FORALL({T1,T2}, {big(), big()},
             begin
                 {X1,X2} = {sext:encode(T1), sext:encode(T2)},
                 collect(size(term_to_binary({T1,T2})),
@@ -116,6 +128,10 @@ prop_sort_neg_fs() ->
 prop_encode() ->
     ?FORALL(T, term(),
             sext:decode(sext:encode(T)) == T).
+
+prop_decode_legacy_big() ->
+    ?FORALL(T, big(),
+	    sext:decode(sext:legacy_encode_bignum(T)) == T).
 
 prop_encode_sb32() ->
     ?FORALL(T, term(),
