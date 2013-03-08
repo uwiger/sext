@@ -19,7 +19,7 @@
 %% @end
 -module(sext).
 
--export([encode/1, decode/1, decode_next/1]).
+-export([encode/1, encode/2, decode/1, decode_next/1]).
 -export([encode_hex/1, decode_hex/1]).
 -export([encode_sb32/1, decode_sb32/1]).
 -export([prefix/1]).
@@ -28,7 +28,6 @@
 -export([to_sb32/1, from_sb32/1]).
 -export([to_hex/1, from_hex/1]).
 
--export([legacy_encode_bignum/1]).
 
 -define(negbig   , 8).
 -define(neg4     , 9).
@@ -62,15 +61,17 @@
 %% original terms would.
 %% @end
 %%
-encode(X) when is_tuple(X)     -> encode_tuple(X);
-encode(X) when is_list(X)      -> encode_list(X);
-encode(X) when is_pid(X)       -> encode_pid(X);
-encode(X) when is_port(X)      -> encode_port(X);
-encode(X) when is_reference(X) -> encode_ref(X);
-encode(X) when is_number(X)    -> encode_number(X);
-encode(X) when is_binary(X)    -> encode_binary(X);
-encode(X) when is_bitstring(X) -> encode_bitstring(X);
-encode(X) when is_atom(X)      -> encode_atom(X).
+encode(X) -> encode(X, false).
+
+encode(X, Legacy) when is_tuple(X)  -> encode_tuple(X, Legacy);
+encode(X, Legacy) when is_list(X)   -> encode_list(X, Legacy);
+encode(X, _) when is_pid(X)         -> encode_pid(X);
+encode(X, _) when is_port(X)        -> encode_port(X);
+encode(X, _) when is_reference(X)   -> encode_ref(X);
+encode(X, Legacy) when is_number(X) -> encode_number(X, Legacy);
+encode(X, _) when is_binary(X)      -> encode_binary(X);
+encode(X, _) when is_bitstring(X)   -> encode_bitstring(X);
+encode(X, _) when is_atom(X)        -> encode_atom(X).
 
 %% @spec encode_sb32(Term::any()) -> binary()
 %% @doc Encodes any Erlang term into an sb32-encoded binary.
@@ -210,9 +211,9 @@ pp(B) when is_bitstring(B) ->
 
 
 
-encode_tuple(T) ->
+encode_tuple(T, Legacy) ->
     Sz = size(T),
-    encode_tuple_elems(1, Sz, T, <<?tuple, Sz:32>>).
+    encode_tuple_elems(1, Sz, T, <<?tuple, Sz:32>>, Legacy).
 
 prefix_tuple(T) ->
     Sz = size(T),
@@ -221,10 +222,10 @@ prefix_tuple(T) ->
 
 %% It's easier to iterate over a tuple by converting it to a list, but
 %% since the tuple /can/ be huge, let's do it this way.
-encode_tuple_elems(P, Sz, T, Acc) when P =< Sz ->
-    E = encode(element(P,T)),
-    encode_tuple_elems(P+1, Sz, T, <<Acc/binary, E/binary>>);
-encode_tuple_elems(_, _, _, Acc) ->
+encode_tuple_elems(P, Sz, T, Acc, Legacy) when P =< Sz ->
+    E = encode(element(P,T), Legacy),
+    encode_tuple_elems(P+1, Sz, T, <<Acc/binary, E/binary>>, Legacy);
+encode_tuple_elems(_, _, _, Acc, _) ->
     Acc.
 
 prefix_tuple_elems([A|T], Acc) when is_atom(A) ->
@@ -253,8 +254,8 @@ prefix_tuple_elems([], Acc) ->
 
 %% encode_list([]) ->
 %%     <<?nil>>;
-encode_list(L) ->
-    encode_list_elems(L, <<?list>>).
+encode_list(L, Legacy) ->
+    encode_list_elems(L, <<?list>>, Legacy).
 
 %% prefix_list([]) ->
 %%     {false, <<?nil>>};
@@ -304,9 +305,12 @@ encode_atom(A) ->
     <<?atom, Enc/binary>>.
 
 
-encode_number(N) when is_integer(N) ->
-    encode_int(N, none);
-encode_number(F) when is_float(F) ->
+encode_number(N) ->
+    encode_number(N, false).
+
+encode_number(N, Legacy) when is_integer(N) ->
+    encode_int(N, none, Legacy);
+encode_number(F, _Legacy) when is_float(F) ->
     encode_float(F).
 
 %% 
@@ -359,7 +363,10 @@ encode_float(F) ->
     end.
 
 
-encode_int(I,R) when I >= 0, I =< 16#7fffffff ->
+encode_int(I, R) ->
+    encode_int(I, R, false).
+
+encode_int(I,R, _Legacy) when I >= 0, I =< 16#7fffffff ->
     ?dbg("encode_int(~p, ~p)~n", [I,R]),
     if R == none ->
 	    << ?pos4, I:31, 0:1 >>;
@@ -374,9 +381,9 @@ encode_int(I,R) when I >= 0, I =< 16#7fffffff ->
 		    << ?pos4, I:31, 1:1, Rbits/binary >>
 	       end
     end;
-encode_int(I,R) when I > 16#7fffffff ->
+encode_int(I,R, Legacy) when I > 16#7fffffff ->
     ?dbg("encode_int(~p, ~p)~n", [I,R]),
-    Bytes = encode_big(I),
+    Bytes = encode_big(I, Legacy),
     if R == none ->
 	    <<?posbig, Bytes/binary, 0:8>>;
        true ->
@@ -390,7 +397,7 @@ encode_int(I,R) when I > 16#7fffffff ->
 		    <<?posbig, Bytes/binary, 1:8, Rbits/binary>>
 	    end
     end;
-encode_int(I, R) when I < 0 ->
+encode_int(I, R, _Legacy) when I < 0 ->
     encode_neg_int(I, R).
 
 encode_neg_int(I,R) when I =< 0, I >= -16#7fffffff ->
@@ -424,18 +431,15 @@ encode_neg_int(I,R) when I < -16#7fFFffFF ->
 %%      RAdj = MaxR - Ri,
 %%     ?dbg("RAdj = ~p~n", [<<RAdj:Sz>>]),
 %%     encode_bits_elems(<<RAdj:Sz>>).
-legacy_encode_bignum(I) when is_integer(I), I > 16#7fffffff ->
+encode_big(I, Legacy) ->
     Bl = encode_big1(I),
     ?dbg("Bl = ~p~n", [Bl]),
-    Bb = list_to_binary(Bl),
-    ?dbg("Bb = ~p~n", [Bb]),
-    <<?posbig, (encode_bin_elems(Bb))/binary, 0:8>>.
-
-
-encode_big(I) ->
-    Bl = encode_big1(I),
-    ?dbg("Bl = ~p~n", [Bl]),
-    Bb = prepend_size(list_to_binary(Bl)),
+    Bb = case Legacy of
+             false ->
+                 prepend_size(list_to_binary(Bl));
+             true ->
+                 list_to_binary(Bl)
+         end,
     ?dbg("Bb = ~p~n", [Bb]),
     encode_bin_elems(Bb).
 
@@ -522,17 +526,17 @@ encode_big1(I, Acc) ->
 
 
 
-encode_list_elems([], Acc) ->
+encode_list_elems([], Acc, _) ->
     <<Acc/binary, 2>>;
-encode_list_elems(B, Acc) when is_bitstring(B) ->
+encode_list_elems(B, Acc, Legacy) when is_bitstring(B) ->
     %% improper list
-    <<Acc/binary, ?bin_tail, (encode(B))/binary>>;
-encode_list_elems(E, Acc) when not(is_list(E)) ->
+    <<Acc/binary, ?bin_tail, (encode(B, Legacy))/binary>>;
+encode_list_elems(E, Acc, Legacy) when not(is_list(E)) ->
     %% improper list
-    <<Acc/binary, 1, (encode(E))/binary>>;
-encode_list_elems([H|T], Acc) ->
-    Enc = encode(H),
-    encode_list_elems(T, <<Acc/binary, Enc/binary>>).
+    <<Acc/binary, 1, (encode(E, Legacy))/binary>>;
+encode_list_elems([H|T], Acc, Legacy) ->
+    Enc = encode(H,Legacy),
+    encode_list_elems(T, <<Acc/binary, Enc/binary>>, Legacy).
 
 %% prefix_list_elems([], Acc)    ->  {false, <<Acc/binary, ?nil>>};
 prefix_list_elems([], Acc) ->

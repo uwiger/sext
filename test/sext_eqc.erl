@@ -131,7 +131,7 @@ prop_encode() ->
 
 prop_decode_legacy_big() ->
     ?FORALL(T, big(),
-	    sext:decode(sext:legacy_encode_bignum(T)) == T).
+	    sext:decode(sext:encode(T, true)) == T).
 
 prop_encode_sb32() ->
     ?FORALL(T, term(),
