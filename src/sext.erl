@@ -63,6 +63,18 @@
 %%
 encode(X) -> encode(X, false).
 
+%% @spec encode(T::term(), Legacy::boolean()) -> binary()
+%% @doc Encodes an Erlang term using legacy bignum encoding.
+%% On March 4 2013, Basho noticed that encoded bignums didn't always sort
+%% properly. This bug has been fixed, but the encoding of bignums necessarily
+%% changed in an incompatible way.
+%%
+%% The new decode/1 version can read the old bignum format, but the old
+%% version obviously cannot read the new. Using `encode(Term, true)', the term
+%% will be encoded using the old format.
+%%
+%% Use only as transition support. This function will be deprecated in time.
+%% @end
 encode(X, Legacy) when is_tuple(X)  -> encode_tuple(X, Legacy);
 encode(X, Legacy) when is_list(X)   -> encode_list(X, Legacy);
 encode(X, _) when is_pid(X)         -> encode_pid(X);
