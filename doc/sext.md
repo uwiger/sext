@@ -15,7 +15,7 @@ __Authors:__ Ulf Wiger ([`ulf.wiger@erlang-solutions.com`](mailto:ulf.wiger@erla
 ##Function Index##
 
 
-<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#decode-1">decode/1</a></td><td>Decodes a binary generated using the function <a href="sext.md#encode-1"><code>sext:encode/1</code></a>.</td></tr><tr><td valign="top"><a href="#decode_hex-1">decode_hex/1</a></td><td></td></tr><tr><td valign="top"><a href="#decode_next-1">decode_next/1</a></td><td>Decode a binary stream, returning the next decoded term and the stream remainder.</td></tr><tr><td valign="top"><a href="#decode_sb32-1">decode_sb32/1</a></td><td>Decodes a binary generated using the function <a href="#encode_sb32-1"><code>encode_sb32/1</code></a>.</td></tr><tr><td valign="top"><a href="#encode-1">encode/1</a></td><td>Encodes any Erlang term into a binary.</td></tr><tr><td valign="top"><a href="#encode-2">encode/2</a></td><td>Encodes an Erlang term using legacy bignum encoding.</td></tr><tr><td valign="top"><a href="#encode_hex-1">encode_hex/1</a></td><td>Encodes any Erlang term into a hex-encoded binary.</td></tr><tr><td valign="top"><a href="#encode_sb32-1">encode_sb32/1</a></td><td>Encodes any Erlang term into an sb32-encoded binary.</td></tr><tr><td valign="top"><a href="#from_hex-1">from_hex/1</a></td><td>Converts from a hex-encoded binary into a 'normal' binary.</td></tr><tr><td valign="top"><a href="#from_sb32-1">from_sb32/1</a></td><td>Converts from an sb32-encoded bitstring into a 'normal' bitstring.</td></tr><tr><td valign="top"><a href="#prefix-1">prefix/1</a></td><td>Encodes a binary for prefix matching of similar encoded terms.</td></tr><tr><td valign="top"><a href="#prefix_hex-1">prefix_hex/1</a></td><td>Generates a hex-encoded binary for prefix matching.</td></tr><tr><td valign="top"><a href="#prefix_sb32-1">prefix_sb32/1</a></td><td>Generates an sb32-encoded binary for prefix matching.</td></tr><tr><td valign="top"><a href="#to_hex-1">to_hex/1</a></td><td>Converts a binary into a hex-encoded binary
+<table width="100%" border="1" cellspacing="0" cellpadding="2" summary="function index"><tr><td valign="top"><a href="#decode-1">decode/1</a></td><td>Decodes a binary generated using the function <a href="sext.md#encode-1"><code>sext:encode/1</code></a>.</td></tr><tr><td valign="top"><a href="#decode_hex-1">decode_hex/1</a></td><td></td></tr><tr><td valign="top"><a href="#decode_next-1">decode_next/1</a></td><td>Decode a binary stream, returning the next decoded term and the stream remainder.</td></tr><tr><td valign="top"><a href="#decode_sb32-1">decode_sb32/1</a></td><td>Decodes a binary generated using the function <a href="#encode_sb32-1"><code>encode_sb32/1</code></a>.</td></tr><tr><td valign="top"><a href="#encode-1">encode/1</a></td><td>Encodes any Erlang term into a binary.</td></tr><tr><td valign="top"><a href="#encode-2">encode/2</a></td><td>Encodes an Erlang term using legacy bignum encoding.</td></tr><tr><td valign="top"><a href="#encode_hex-1">encode_hex/1</a></td><td>Encodes any Erlang term into a hex-encoded binary.</td></tr><tr><td valign="top"><a href="#encode_sb32-1">encode_sb32/1</a></td><td>Encodes any Erlang term into an sb32-encoded binary.</td></tr><tr><td valign="top"><a href="#from_hex-1">from_hex/1</a></td><td>Converts from a hex-encoded binary into a 'normal' binary.</td></tr><tr><td valign="top"><a href="#from_sb32-1">from_sb32/1</a></td><td>Converts from an sb32-encoded bitstring into a 'normal' bitstring.</td></tr><tr><td valign="top"><a href="#partial_decode-1">partial_decode/1</a></td><td>Decode a sext-encoded term or prefix embedded in a byte stream.</td></tr><tr><td valign="top"><a href="#prefix-1">prefix/1</a></td><td>Encodes a binary for prefix matching of similar encoded terms.</td></tr><tr><td valign="top"><a href="#prefix_hex-1">prefix_hex/1</a></td><td>Generates a hex-encoded binary for prefix matching.</td></tr><tr><td valign="top"><a href="#prefix_sb32-1">prefix_sb32/1</a></td><td>Generates an sb32-encoded binary for prefix matching.</td></tr><tr><td valign="top"><a href="#to_hex-1">to_hex/1</a></td><td>Converts a binary into a hex-encoded binary
 This is conventional hex encoding, with the proviso that
 only capital letters are used, e.g.</td></tr><tr><td valign="top"><a href="#to_sb32-1">to_sb32/1</a></td><td>Converts a bitstring into an sb-encoded bitstring.</td></tr></table>
 
@@ -195,7 +195,45 @@ This function is the reverse of [`to_hex/1`](#to_hex-1).
 
 Converts from an sb32-encoded bitstring into a 'normal' bitstring
 
-This function is the reverse of [`to_sb32/1`](#to_sb32-1).<a name="prefix-1"></a>
+This function is the reverse of [`to_sb32/1`](#to_sb32-1).<a name="partial_decode-1"></a>
+
+###partial_decode/1##
+
+
+
+
+<pre>partial_decode(Other::Bytes) -&gt; {full | partial, DecodedTerm, Rest}</pre>
+<br></br>
+
+
+
+
+
+
+Decode a sext-encoded term or prefix embedded in a byte stream.
+
+Example:
+<pre>  1&gt; T = sext:encode({a,b,c}).
+  &lt;&lt;16,0,0,0,3,12,176,128,8,12,177,0,8,12,177,128,8&gt;&gt;
+  2&gt; sext:partial_decode(&lt;&lt;T/binary, "tail"&gt;&gt;).
+  {full,{a,b,c},&lt;&lt;"tail"&gt;&gt;}
+  3&gt; P = sext:prefix({a,b,'_'}).
+  &lt;&lt;16,0,0,0,3,12,176,128,8,12,177,0,8&gt;&gt;
+  4&gt; sext:partial_decode(&lt;&lt;P/binary, "tail"&gt;&gt;).
+  {partial,{a,b,'_'},&lt;&lt;"tail"&gt;&gt;}</pre>
+
+
+
+Note that a decoded prefix may not be exactly like the encoded prefix.
+For example, `['_']` will be encoded as
+`<<17>>`, i.e. only the 'list' opcode. The
+decoded prefix will be `'_'`, since the encoded prefix would  
+also match the empty list. The decoded prefix will always be a prefix to  
+anything to which the original prefix is a prefix.
+
+For tuples, `{1,'_',3}` encoded and decoded, will result in
+`{1,'_','_'}`, i.e. the tuple size is kept, but the elements
+after the first wildcard are replaced with wildcards.<a name="prefix-1"></a>
 
 ###prefix/1##
 

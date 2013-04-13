@@ -22,7 +22,8 @@
 -export([encode/1, encode/2, decode/1, decode_next/1]).
 -export([encode_hex/1, decode_hex/1]).
 -export([encode_sb32/1, decode_sb32/1]).
--export([prefix/1]).
+-export([prefix/1,
+	 partial_decode/1]).
 -export([prefix_hex/1]).
 -export([prefix_sb32/1]).
 -export([to_sb32/1, from_sb32/1]).
@@ -44,6 +45,20 @@
 %% -define(nil      , 19).
 %% -define(list     , 20).
 %% -define(binary   , 21).
+
+-define(is_sext(X),
+	X==?negbig;
+	    X==?neg4;
+	    X==?pos4;
+	    X==?posbig;
+	    X==?atom;
+	    X==?reference;
+	    X==?port;
+	    X==?pid;
+	    X==?tuple;
+	    X==?list;
+	    X==?binary;
+	    X==?bin_tail).
 
 -define(IMAX1, 16#ffffFFFFffffFFFF).
 
@@ -687,6 +702,46 @@ decode_next(<<?pos4, I:31, F:1, Rest/binary>>) -> decode_pos(I,F,Rest);
 %% decode_next(<<?old_binary, Rest/binary>>) -> decode_binary(Rest);
 decode_next(<<?binary, Rest/binary>>) -> decode_binary(Rest).
 
+-spec partial_decode(binary()) -> {full | partial, any(), binary()}.
+%% @spec partial_decode(Bytes) -> {full | partial, DecodedTerm, Rest}
+%% @doc Decode a sext-encoded term or prefix embedded in a byte stream.
+%%
+%% Example:
+%% ```
+%% 1&gt; T = sext:encode({a,b,c}).
+%% &lt;&lt;16,0,0,0,3,12,176,128,8,12,177,0,8,12,177,128,8&gt;&gt;
+%% 2&gt; sext:partial_decode(&lt;&lt;T/binary, "tail"&gt;&gt;).
+%% {full,{a,b,c},&lt;&lt;"tail"&gt;&gt;}
+%% 3&gt; P = sext:prefix({a,b,'_'}).
+%% &lt;&lt;16,0,0,0,3,12,176,128,8,12,177,0,8&gt;&gt;
+%% 4&gt; sext:partial_decode(&lt;&lt;P/binary, "tail"&gt;&gt;).
+%% {partial,{a,b,'_'},&lt;&lt;"tail"&gt;&gt;}
+%% '''
+%%
+%% Note that a decoded prefix may not be exactly like the encoded prefix.
+%% For example, <code>['_']</code> will be encoded as
+%% <code>&lt;&lt;17&gt;&gt;</code>, i.e. only the 'list' opcode. The
+%% decoded prefix will be <code>'_'</code>, since the encoded prefix would
+%% also match the empty list. The decoded prefix will always be a prefix to
+%% anything to which the original prefix is a prefix.
+%%
+%% For tuples, <code>{1,'_',3}</code> encoded and decoded, will result in
+%% <code>{1,'_','_'}</code>, i.e. the tuple size is kept, but the elements
+%% after the first wildcard are replaced with wildcards.
+%% @end
+partial_decode(<<?tuple, Sz:32, Rest/binary>>) ->
+    partial_decode_tuple(Sz, Rest);
+partial_decode(<<?list, Rest/binary>>) ->
+    partial_decode_list(Rest);
+partial_decode(Other) ->
+    try decode_next(Other) of
+	{Dec, Rest} ->
+	    {full, Dec, Rest}
+    catch
+	error:function_clause ->
+	    {partial, '_', Other}
+    end.
+
 decode_atom(B) ->
     {Bin, Rest} = decode_binary(B),
     {list_to_atom(binary_to_list(Bin)), Rest}.
@@ -699,6 +754,52 @@ decode_tuple(0, Rest, Acc) ->
 decode_tuple(N, Elems, Acc) ->
     {Term, Rest} = decode_next(Elems),
     decode_tuple(N-1, Rest, [Term|Acc]).
+
+partial_decode_tuple(Sz, Elems) ->
+    partial_decode_tuple(Sz, Elems, []).
+
+partial_decode_tuple(0, Rest, Acc) ->
+    {full, list_to_tuple(lists:reverse(Acc)), Rest};
+partial_decode_tuple(N, Elems, Acc) ->
+    case partial_decode(Elems) of
+	{partial, Term, Rest} ->
+	    {partial, list_to_tuple(
+			lists:reverse([Term|Acc]) ++ pad_(N-1)), Rest};
+	{full, Dec, Rest} ->
+	    partial_decode_tuple(N-1, Rest, [Dec|Acc])
+    end.
+
+pad_(0) ->
+    [];
+pad_(N) when N > 0 ->
+    ['_'|pad_(N-1)].
+
+
+partial_decode_list(Elems) ->
+    partial_decode_list(Elems, []).
+
+partial_decode_list(<<>>, Acc) ->
+    {partial, lists:reverse(Acc) ++ '_', <<>>};
+partial_decode_list(<<2, Rest/binary>>, Acc) ->
+    {full, lists:reverse(Acc), Rest};
+partial_decode_list(<<?bin_tail, Next/binary>>, Acc) ->
+    %% improper list, binary tail
+    {Term, Rest} = decode_next(Next),
+    {full, lists:reverse(Acc) ++ Term, Rest};
+partial_decode_list(<<1, Next/binary>>, Acc) ->
+    {Result, Term, Rest} = partial_decode(Next),
+    {Result, lists:reverse(Acc) ++ Term, Rest};
+partial_decode_list(<<X,_/binary>> = Next, Acc) when ?is_sext(X) ->
+    case partial_decode(Next) of
+	{full, Term, Rest} ->
+	    partial_decode_list(Rest, [Term|Acc]);
+	{partial, Term, Rest} ->
+	    {partial, lists:reverse([Term|Acc]) ++ '_', Rest}
+    end;
+partial_decode_list(Rest, Acc) ->
+    {partial, lists:reverse(Acc) ++ '_', Rest}.
+
+
 
 decode_list(Elems) ->
     decode_list(Elems, []).

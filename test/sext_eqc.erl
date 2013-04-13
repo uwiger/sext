@@ -16,14 +16,31 @@
 
 -module(sext_eqc).
 
+%% Prefer QuickCheck, but otherwise try with Proper (some properties will
+%% have trouble under Proper - feel free to investigate).
 -ifdef(EQC).
-
--compile(export_all).
+-define(QC,eqc).
 -include_lib("eqc/include/eqc.hrl").
+-else.
+-ifdef(PROPER).
+-define(QC,proper).
+-include_lib("proper/include/proper.hrl").
+-endif.
+-endif.
+
+-ifdef(QC).
+-compile(export_all).
 -include_lib("eunit/include/eunit.hrl").
 
+get_n(Default) ->
+    case os:getenv("SEXT_TESTS") of
+	false -> Default;
+	Res ->
+	    list_to_integer(Res)
+    end.
+
 sext_test_() ->
-    N = 2000,
+    N = get_n(500),
     {timeout, 60,
      [
       fun() -> t(run(N, prop_encode, fun prop_encode/0)) end
@@ -32,6 +49,12 @@ sext_test_() ->
       , fun() -> t(run(N, prop_sort, fun prop_sort/0)) end
       , fun() -> t(run(N, prop_encode_sb32, fun prop_encode_sb32/0)) end
       , fun() -> t(run(N, prop_sort_sb32, fun prop_sort_sb32/0)) end
+      , fun() -> t(run(N, prop_partial_decode1, fun prop_partial_decode1/0)) end
+      , fun() -> t(run(N, prop_partial_decode2, fun prop_partial_decode2/0)) end
+      , fun() -> t(run(N, prop_partial_decode_plus1,
+		       fun prop_partial_decode_plus1/0)) end
+      , fun() -> t(run(N, prop_partial_decode_plus2,
+		       fun prop_partial_decode_plus2/0)) end
       , fun() -> t(run(N, prop_is_prefix1, fun prop_is_prefix1/0)) end
       , fun() -> t(run(N, prop_is_prefix2, fun prop_is_prefix2/0)) end
       , fun() -> t(run(N, prop_encode_hex, fun prop_encode_hex/0)) end
@@ -41,6 +64,8 @@ sext_test_() ->
       , fun() -> t(run(N,prop_non_proper_sorts,fun prop_non_proper_sorts/0)) end
      ]}.
 
+t({_Lbl, Res}) ->
+    ?assert(Res == true);
 t(Res) ->
     ?assert(Res == true).
 
@@ -48,7 +73,7 @@ run() ->
     run(good_number_of_tests()).
 
 good_number_of_tests() ->
-    2000.
+    get_n(2000).
 
 run(Num) ->
     [
@@ -60,6 +85,10 @@ run(Num) ->
      , run(Num, prop_sort_big, fun prop_sort_big/0)
      , run(Num, prop_encode_sb32, fun prop_encode_sb32/0)
      , run(Num, prop_sort_sb32 , fun prop_sort_sb32/0)
+     , run(Num, prop_partial_decode1, fun prop_partial_decode1/0)
+     , run(Num, prop_partial_decode2, fun prop_partial_decode2/0)
+     , run(Num, prop_partial_decode_plus1, fun prop_partial_decode_plus1/0)
+     , run(Num, prop_partial_decode_plus2, fun prop_partial_decode_plus2/0)
      , run(Num, prop_is_prefix1, fun prop_is_prefix1/0)
      , run(Num, prop_is_prefix2, fun prop_is_prefix2/0)
      , run(Num, prop_non_proper_sorts, fun prop_non_proper_sorts/0)
@@ -67,9 +96,9 @@ run(Num) ->
 
 run(Num, Lbl, F) ->
     io:fwrite(user, "EQC test: ~p (~p)... ", [Lbl, Num]),
-    Res = eqc:quickcheck(eqc:numtests(Num, F())),
+    Res = ?QC:quickcheck(?QC:numtests(Num, F())),
     io:fwrite(user, "-> ~p~n", [Res]),
-    Res.
+    {Lbl, Res}.
 
 
 %% In this property, the ?IMPLIES condition guards us against the
@@ -79,7 +108,7 @@ run(Num, Lbl, F) ->
 %% we limit ourselves to testing the sort order of term pairs where the
 %% values actually differ.
 prop_sort() ->
-    ?FORALL({T1,T2}, {term(), term()},
+    ?FORALL({T1,T2}, {term_(), term_()},
             begin
                 {X1,X2} = {sext:encode(T1), sext:encode(T2)},
                 collect(size(term_to_binary({T1,T2})),
@@ -95,7 +124,7 @@ prop_sort_big() ->
             end).
 
 prop_sort_sb32() ->
-    ?FORALL({T1,T2}, {term(), term()},
+    ?FORALL({T1,T2}, {term_(), term_()},
             begin
                 {X1,X2} = {sext:encode_sb32(T1), sext:encode_sb32(T2)},
                 collect(size(term_to_binary({T1,T2})),
@@ -103,7 +132,7 @@ prop_sort_sb32() ->
             end).
 
 prop_sort_hex() ->
-    ?FORALL({T1,T2}, {term(), term()},
+    ?FORALL({T1,T2}, {term_(), term_()},
             begin
                 {X1,X2} = {sext:encode_hex(T1), sext:encode_hex(T2)},
                 collect(size(term_to_binary({T1,T2})),
@@ -126,7 +155,7 @@ prop_sort_neg_fs() ->
             end).
 
 prop_encode() ->
-    ?FORALL(T, term(),
+    ?FORALL(T, term_(),
             sext:decode(sext:encode(T)) == T).
 
 prop_decode_legacy_big() ->
@@ -134,16 +163,100 @@ prop_decode_legacy_big() ->
 	    sext:decode(sext:encode(T, true)) == T).
 
 prop_encode_sb32() ->
-    ?FORALL(T, term(),
+    ?FORALL(T, term_(),
             sext:decode_sb32(sext:encode_sb32(T)) == T).
 
 prop_encode_hex() ->
-    ?FORALL(T, term(),
+    ?FORALL(T, term_(),
             sext:decode_hex(sext:encode_hex(T)) == T).
 
 prop_prefix_equiv() ->
-    ?FORALL(T, term(),
+    ?FORALL(T, term_(),
             sext:encode(T) == sext:prefix(T)).
+
+%% Partial-decoding a whole term should give the term back
+prop_partial_decode1() ->
+    ?FORALL(T, term_(),
+	    begin
+		Enc = sext:encode(T),
+		{full, Dec, Rest} = sext:partial_decode(Enc),
+		Dec == T andalso Rest == <<>>
+	    end).
+
+%% Partial-decoding a prefix should give a _comparable_ prefix back
+prop_partial_decode2() ->
+    ?FORALL(Pat, wild_pat(),
+	    begin
+		Pfx = sext:prefix(Pat),
+		case sext:partial_decode(Pfx) of
+		    {full, _, _} -> true;
+		    {partial, Dec, Rest} ->
+			comp_pat(Dec, Pat) andalso Rest == <<>>
+		end
+	    end).
+
+%% A sext term followed by something not sext-encoded
+prop_partial_decode_plus1() ->
+    ?FORALL(T, term_(),
+	    begin
+		Enc = sext:encode(T),
+		{full, Dec, <<"foo">>} =
+		    sext:partial_decode(<<Enc/binary, "foo">>),
+		Dec == T
+	    end).
+
+%% A sext prefix followed by something not sext-encoded
+prop_partial_decode_plus2() ->
+    ?FORALL(Pat, wild_pat(),
+	    begin
+		Pfx = sext:prefix(Pat),
+		case sext:partial_decode(<<Pfx/binary, "foo">>) of
+		    {full, Dec, <<"foo">>} ->
+			Dec == Pat;
+		    {partial, Dec, <<"foo">>} ->
+			comp_pat(Dec, Pat)
+		end
+	    end).
+
+wild_pat() ->
+    ?LET({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
+			   positions(Tp) > 0),wild()},
+	 ?LET(P, choose(1, positions(T)),
+	      make_wild(T, P, W))).
+
+comp_pat(X, X) -> true;
+comp_pat(A, B) when is_tuple(A), is_tuple(B), size(A) == size(B) ->
+    comp_pat_l(tuple_to_list(A), tuple_to_list(B));
+comp_pat(Dec, Pat) when is_list(Dec), is_list(Pat) ->
+    comp_pat_l(Dec, Pat);
+comp_pat(A, B) ->  % A: decoded; B: prefix
+    case {is_wild(A), is_wild(B)} of
+	{true, true} -> true;
+	{true, false} ->
+	    case B of
+		[H|_] ->
+		    %% This is because the decoded prefix of [] and ['_'|'_']
+		    %% are both '_'
+		    is_wild(H);
+		_ -> false
+	    end;
+	_ ->
+	    false
+    end.
+
+comp_pat_l([H1|T1], [H2|T2]) ->
+    case is_wild(H1) of
+	true -> true;
+	false ->
+	    case comp_pat(H1, H2) of
+		true  -> comp_pat_l(T1, T2);
+		false -> false
+	    end
+    end;
+comp_pat_l([], []) -> true;
+comp_pat_l(A, _) ->
+    is_wild(A).
+
 
 prop_is_prefix1() ->
     ?FORALL({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
@@ -250,13 +363,13 @@ is_prefix(A, B) ->
     binary:longest_common_prefix([A,B]) == Sz.
 
 prop_measure_term() ->
-    ?FORALL(T,term(),
+    ?FORALL(T,term_(),
             measure(term_size,size(term_to_binary(T)),true)).
 
 simple_term() ->
     oneof(simple_types()).
 
-term() ->
+term_() ->
     ?SIZED(Size,term(Size)).
 
 term(0) ->
@@ -366,6 +479,22 @@ positions([], Acc) ->
     Acc;
 positions(_, Acc) ->
     Acc+1.
+
+is_wild('_') -> true;
+is_wild(A) when is_atom(A) ->
+    case atom_to_list(A) of
+	"\$" ++ Is ->
+	    try _ = list_to_integer(Is),
+		  true
+	    catch
+		error:_ ->
+		    false
+	    end;
+	_ ->
+	    false
+    end;
+is_wild(_) ->
+    false.
 
 make_wild(T, P, W) when P > 0 ->
     if is_tuple(T) ->
