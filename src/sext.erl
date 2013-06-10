@@ -18,6 +18,7 @@
 %% @doc Sortable serialization library
 %% @end
 -module(sext).
+-on_load(nif_mode/0).
 
 -export([encode/1, encode/2, decode/1, decode_next/1]).
 -export([encode_hex/1, decode_hex/1]).
@@ -28,7 +29,8 @@
 -export([prefix_sb32/1]).
 -export([to_sb32/1, from_sb32/1]).
 -export([to_hex/1, from_hex/1]).
-
+-export([encode_binary/1]).
+-export([nif_mode/0, fake/2]).
 
 -define(negbig   , 8).
 -define(neg4     , 9).
@@ -67,7 +69,12 @@
             true -> io:fwrite("~p: " ++ Fmt, [?LINE|Args]);
             _ -> no_dbg
         end).
+
 %%-define(dbg(F,A),no_debug).
+
+%% @doc load nifs
+nif_mode() ->
+    erlang:load_nif("../priv/sext_drv", 0).
 
 %% @spec encode(T::term()) -> binary()
 %% @doc Encodes any Erlang term into a binary.
@@ -616,8 +623,22 @@ is_wild(_) ->
 encode_bin_elems(<<>>) ->
     <<8>>;
 encode_bin_elems(B) ->
-    Pad = 8 - (size(B) rem 8),
-    << (<< <<1:1, B1:8>> || <<B1>> <= B >>)/bitstring, 0:Pad, 8 >>.
+    %% Pad = 8 - (size(B) rem 8),
+    %% << (<< <<1:1, B1:8>> || <<B1>> <= B >>)/bitstring, 0:Pad, 8 >>.
+    encode_bin_elems(B, <<>>).
+
+encode_bin_elems(<<B:1024/bytes, Rest/binary>>, Acc) ->
+    Enc = encode_bin_elems_int(B, 0),
+    encode_bin_elems(Rest, <<Acc/binary, Enc/binary>>);
+encode_bin_elems(B, Acc) ->
+    Enc = encode_bin_elems_int(B, 1),
+    <<Acc/binary, Enc/binary>>.
+
+fake(B,E) ->
+    encode_bin_elems_int(B,E).
+    
+encode_bin_elems_int(_B, _End) ->
+    error(nif_not_loaded).
 
 encode_neg_bits(<<>>) ->
     <<247>>;
@@ -970,20 +991,37 @@ strip_first_one(I) ->
 strip_one(<<0:1, Rest/bitstring>>) -> strip_one(Rest);
 strip_one(<<1:1, Rest/bitstring>>) -> Rest.
 
-
 decode_binary(<<8, Rest/binary>>) ->  {<<>>, Rest};
-decode_binary(B)     ->  decode_binary(B, 0, <<>>).
+decode_binary(B)     ->  
+    case decode_binary(B, <<>>) of
+        fallback -> decode_binary_erlang(B, 0, <<>>);
+        Other -> Other
+    end.
 
-decode_binary(<<1:1,H:8,Rest/bitstring>>, N, Acc) ->
+decode_binary(<<B:1440/bytes, Rest/binary>>, Acc) ->
+    %%<<B1:1154/bytes, _/binary>> = B,
+    %%io:format("~p ~p~n", [B1, byte_size(B1)]),
+    Dec = decode_binary_int(B,0),
+    decode_binary(Rest, <<Acc/binary, Dec/binary>>);
+decode_binary(B, Acc) ->
+    case decode_binary_int(B,1) of
+        {Dec, Rest} -> {<<Acc/binary, Dec/binary>>, Rest};
+        fallback -> fallback
+    end.
+
+decode_binary_int(_Bin,_End) ->
+    error(nif_not_loaded).
+
+decode_binary_erlang(<<1:1,H:8,Rest/bitstring>>, N, Acc) ->
     case Rest of 
-	<<1:1,_/bitstring>> ->
-	    decode_binary(Rest, N+9, << Acc/binary, H >>);
-	_ ->
-	    Pad = 8 - ((N+9) rem 8),
-	    <<0:Pad,EndBits,Rest1/binary>> = Rest,
-	    TailPad = 8-EndBits,
-	    <<Tail:EndBits,0:TailPad>> = <<H>>,
-	    {<< Acc/binary, Tail:EndBits >>, Rest1}
+       <<1:1,_/bitstring>> ->
+           decode_binary_erlang(Rest, N+9, << Acc/binary, H >>);
+       _ ->
+           Pad = 8 - ((N+9) rem 8),
+           <<0:Pad,EndBits,Rest1/binary>> = Rest,
+           TailPad = 8-EndBits,
+           <<Tail:EndBits,0:TailPad>> = <<H>>,
+           {<< Acc/binary, Tail:EndBits >>, Rest1}
     end.
 
 decode_neg_binary(<<247, Rest/binary>>) ->  {<<>>, Rest};  % 16#ff - 8
