@@ -5,3 +5,6 @@ ebin/
 */*~
 erl_crash.dump
 current_counterexample.eqc
+#*#
+*.o
+*.so

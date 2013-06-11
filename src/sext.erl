@@ -74,7 +74,18 @@
 
 %% @doc load nifs
 nif_mode() ->
-    erlang:load_nif("../priv/sext_drv", 0).
+    SoName = case code:priv_dir(?MODULE) of
+                 {error, bad_name} ->
+                     case code:which(?MODULE) of
+                         Filename when is_list(Filename) ->
+                             filename:join([filename:dirname(Filename),"../priv", "sext_drv"]);
+                         _ ->
+                             filename:join("../priv", "sext_drv")
+                     end;
+                 Dir ->
+                     filename:join(Dir, "sext_drv")
+             end,
+    erlang:load_nif(SoName, 0).
 
 %% @spec encode(T::term()) -> binary()
 %% @doc Encodes any Erlang term into a binary.
