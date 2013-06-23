@@ -19,10 +19,12 @@
 %% Prefer QuickCheck, but otherwise try with Proper (some properties will
 %% have trouble under Proper - feel free to investigate).
 -ifdef(EQC).
+-undef(QC).
 -define(QC,eqc).
 -include_lib("eqc/include/eqc.hrl").
 -else.
 -ifdef(PROPER).
+-undef(QC).
 -define(QC,proper).
 -include_lib("proper/include/proper.hrl").
 -endif.
