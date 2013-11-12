@@ -1,18 +1,3 @@
-%%==============================================================================
-%% Copyright 2010 Erlang Solutions Ltd.
-%%
-%% Licensed under the Apache License, Version 2.0 (the "License");
-%% you may not use this file except in compliance with the License.
-%% You may obtain a copy of the License at
-%%
-%% http://www.apache.org/licenses/LICENSE-2.0
-%%
-%% Unless required by applicable law or agreed to in writing, software
-%% distributed under the License is distributed on an "AS IS" BASIS,
-%% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-%% See the License for the specific language governing permissions and
-%% limitations under the License.
-%%==============================================================================
 %%
 %% @author Ulf Wiger <ulf.wiger@erlang-solutions.com>
 %% @doc Sortable serialization library
@@ -234,9 +219,16 @@ chop_prefix_tail(Bin) ->
 %% @end
 %%
 decode(Elems) ->
-    case decode_next(Elems) of
-	{Term, <<>>} -> Term;
-	Other -> erlang:error(badarg, Other)
+    case decode_nif(Elems) of
+        {ok, Term} ->
+            Term;
+        {error, invalid} ->
+            erlang:error(badarg);
+        {error, unsupported} ->
+            case decode_next(Elems) of
+                {Term, <<>>} -> Term;
+                Other -> erlang:error(badarg, Other)
+            end
     end.
 
 %% spec decode_sb32(B::binary()) -> term()
@@ -732,7 +724,7 @@ decode_next(<<?posbig, Rest/binary>>) -> decode_pos_big(Rest);
 decode_next(<<?neg4, I:31, F:1, Rest/binary>>) -> decode_neg(I,F,Rest);
 decode_next(<<?pos4, I:31, F:1, Rest/binary>>) -> decode_pos(I,F,Rest);
 %% decode_next(<<?old_binary, Rest/binary>>) -> decode_binary(Rest);
-decode_next(<<?binary, Rest/binary>>) -> decode_binary(Rest).
+decode_next(<<?binary, Rest/binary>>) -> decode_binary2(Rest).
 
 -spec partial_decode(binary()) -> {full | partial, any(), binary()}.
 %% @spec partial_decode(Bytes) -> {full | partial, DecodedTerm, Rest}
@@ -1003,36 +995,31 @@ strip_one(<<0:1, Rest/bitstring>>) -> strip_one(Rest);
 strip_one(<<1:1, Rest/bitstring>>) -> Rest.
 
 decode_binary(<<8, Rest/binary>>) ->  {<<>>, Rest};
-decode_binary(B)     ->  
-    case decode_binary(B, <<>>) of
-        fallback -> decode_binary_erlang(B, 0, <<>>);
+decode_binary(B)     ->  decode_binary(B, 0, <<>>).
+
+decode_binary2(<<8, Rest/binary>>) ->  {<<>>, Rest};
+decode_binary2(B)     ->  
+    case decode_binary_nif(B) of
+        fallback -> decode_binary(B, 0, <<>>);
         Other -> Other
     end.
 
-decode_binary(<<B:1440/bytes, Rest/binary>>, Acc) ->
-    %%<<B1:1154/bytes, _/binary>> = B,
-    %%io:format("~p ~p~n", [B1, byte_size(B1)]),
-    Dec = decode_binary_int(B,0),
-    decode_binary(Rest, <<Acc/binary, Dec/binary>>);
-decode_binary(B, Acc) ->
-    case decode_binary_int(B,1) of
-        {Dec, Rest} -> {<<Acc/binary, Dec/binary>>, Rest};
-        fallback -> fallback
-    end.
-
-decode_binary_int(_Bin,_End) ->
+decode_binary_nif(_Bin) ->
     error(nif_not_loaded).
 
-decode_binary_erlang(<<1:1,H:8,Rest/bitstring>>, N, Acc) ->
+decode_nif(_Bin) ->
+    error(nif_not_loaded).
+
+decode_binary(<<1:1,H:8,Rest/bitstring>>, N, Acc) ->
     case Rest of 
-       <<1:1,_/bitstring>> ->
-           decode_binary_erlang(Rest, N+9, << Acc/binary, H >>);
-       _ ->
-           Pad = 8 - ((N+9) rem 8),
-           <<0:Pad,EndBits,Rest1/binary>> = Rest,
-           TailPad = 8-EndBits,
-           <<Tail:EndBits,0:TailPad>> = <<H>>,
-           {<< Acc/binary, Tail:EndBits >>, Rest1}
+	<<1:1,_/bitstring>> ->
+	    decode_binary(Rest, N+9, << Acc/binary, H >>);
+	_ ->
+	    Pad = 8 - ((N+9) rem 8),
+	    <<0:Pad,EndBits,Rest1/binary>> = Rest,
+	    TailPad = 8-EndBits,
+	    <<Tail:EndBits,0:TailPad>> = <<H>>,
+	    {<< Acc/binary, Tail:EndBits >>, Rest1}
     end.
 
 decode_neg_binary(<<247, Rest/binary>>) ->  {<<>>, Rest};  % 16#ff - 8
