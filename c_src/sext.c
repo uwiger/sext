@@ -1,3 +1,22 @@
+// -------------------------------------------------------------------
+//
+// Copyright (c) 2013 Basho Technologies, Inc. All Rights Reserved.
+//
+// This file is provided to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file
+// except in compliance with the License.  You may obtain
+// a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+//
+// -------------------------------------------------------------------
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -25,7 +44,7 @@
 #define BYTE_HIGH_BIT ((unsigned char)0x80)
 
 // If defined, tries some fancy optimizations. So far I have not seen
-// huge improvements with -O3, but about 5-10% ain't bad. Compilers 1, Engel 0
+// huge improvements with -O3, but about 5-10% ain't bad.
 #define HAND_ROLLED
 
 enum DecodeResult {DECODE_OK, DECODE_INVALID, DECODE_UNSUPPORTED, DECODE_ERROR};
@@ -44,7 +63,7 @@ static inline uint32_t to_uint_32(unsigned char *d)
 }
 
 /*
-   A sext encoded binary consists of series of 1 bits markers + 8 bits of data.
+   A sext encoded binary consists of a series of 1 bit markers + 8 bits of data.
    It should look like this, where _ denotes a data bit:
 
    0         1         2         3         4
@@ -53,21 +72,21 @@ static inline uint32_t to_uint_32(unsigned char *d)
    ____;_1__|____;__1_|____;___1|____;____|1... starts all over again
 
    The sequence ends when the next marker bit is zero. At that point there
-   will be some zero padding until the next byte boundary and a end marker
+   will be some zero padding until the next byte boundary and an end marker
    byte = 8. Bitstrings would have something < 8, but we don't support those.
    */
 
 // Returns largest size_t if failed to decode the binary.
 static size_t count_binary_bytes(ErlNifBinary *bin, size_t ofs)
 {
-    // As a special case, and encoded empty binary is a single 8 byte
+    // As a special case, a single 8 means an empty binary.
     if (bin->data[ofs] == 8) {
         return 0;
     }
 
     size_t n = 0;
 #ifdef HAND_ROLLED
-    // This tries to count the marker bits in groups of eight,
+    // This tries to count the marker bits in groups of eight (9 encoded bytes)
     // trading more CPU arithmetic for less branching
     size_t available = bin->size - ofs;
     while (available > 8) {
@@ -470,10 +489,18 @@ sext_decode(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
                 return enif_make_tuple2(env,
                         enif_make_atom(env, "error"),
                         enif_make_atom(env, "unsupported"));
-            default:
+            case DECODE_ERROR:
+                return enif_make_tuple2(env,
+                        enif_make_atom(env, "error"),
+                        term);
+            case DECODE_OK:
                 return enif_make_tuple2(env,
                         enif_make_atom(env, "ok"),
                         term);
+            default:
+                return enif_make_tuple2(env,
+                        enif_make_atom(env, "error"),
+                        enif_make_atom(env, "implementation_error"));
         }
     }
     return enif_make_badarg(env);
