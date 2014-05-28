@@ -1,6 +1,6 @@
 @author Ulf Wiger <ulf@wiger.net>
 @doc A sortable serialization library
-This library offers a serialization format (a la term_to_binary()) that 
+This library offers a serialization format (a la term_to_binary()) that
 preserves the Erlang term order.
 
 <pre>
@@ -142,8 +142,8 @@ A binary is basically a bitstring whose size is a multiple of 8. From a sorting
 perspective, binaries and bitstrings are both sorted as left-aligned bit
 arrays.
 
-<pre lang="erlang">1&gt; bitstring_to_list(&lt;&lt;11111111111:11&gt;&gt;).
-[56,&lt;&lt;7:3&gt;&gt;]</pre>
+<pre lang="erlang"><![CDATA[1> bitstring_to_list(<<11111111111:11>>).
+[56,<<7:3>>]]]></pre>
 
 Binaries and bitstrings are encoded as the binary tag, followed by each whole
 byte, each padded with a leading 1 (one bit), followed by a number of 0-bits
@@ -153,10 +153,10 @@ binary is 8-bit aligned.
 
 Example:
 
-<pre lang="erlang">2> sext:encode(&lt;&lt;1,2,3>>).
-&lt;&lt;18,128,192,160,96,8>>
-3> &lt;&lt;18, 1:1,1, 1:1,2, 1:1,3, 0:5, 8>>.
-&lt;&lt;18,128,192,160,96,8>></pre>
+<pre lang="erlang"><![CDATA[2> sext:encode(<<1,2,3>>).
+<<18,128,192,160,96,8>>
+3> <<18, 1:1,1, 1:1,2, 1:1,3, 0:5, 8>>.
+<<18,128,192,160,96,8>>]]></pre>
 
 In the example above, we inserted 3 1-bits, and therefore had to insert 5 more
 pad bits (zeroes) at the end. The last byte is 8, signifying that the original
@@ -169,10 +169,10 @@ The value of the last byte is the bit size of the remainder.
 
 Example:
 
-<pre lang="erlang">2> sext:encode(&lt;&lt;1,2,3>>).
-&lt;&lt;18,128,192,160,96,8>>
-3> sext:encode(&lt;&lt;18, 1:1,1, 1:1,2, 1:1,3, 0:5, 8>>).
-&lt;&lt;18,128,192,160,96,8>></pre>
+<pre lang="erlang"><![CDATA[2> sext:encode(<<1,2,3>>).
+<<18,128,192,160,96,8>>
+3> sext:encode(<<18, 1:1,1, 1:1,2, 1:1,3, 0:5, 8>>).
+<<18,128,192,160,96,8>>]]></pre>
 
 The first part of the bitstring is encoded exactly like above. The number 4:3
 is first padded with 1 then padded at the end to become a whole byte. Then
@@ -191,22 +191,23 @@ type tag).
 <h3>2.5.1 Positive small integers, pos4</h3>
 
 Integers up to 31 bits are encoded as &lt;&lt; ?pos4, I:31, F:1 &gt;&gt;
-where I is the integer value, and F is 1 if a fraction part follows; 
+where I is the integer value, and F is 1 if a fraction part follows;
 0 otherwise.
 
 <h3>2.5.2 Positive large integers</h3>
 
-Larger integers are converted to a byte string and then encoded like 
-binaries (without the 'binary' type tag), followed by a byte signifying 
+Larger integers are converted to a byte string and then encoded like
+binaries (without the 'binary' type tag), followed by a byte signifying
 whether a fraction part follows (1 if yes; 0 otherwise).
 
-<pre lang="erlang">Bytes = encode_big(I),&lt;&lt; ?pos_big, Bytes/binary, F:8 &gt;&gt;</pre>
+<pre lang="erlang"><![CDATA[Bytes = encode_big(I),
+<< ?pos_big, Bytes/binary, F:8 >>]]></pre>
 
 <h3>2.5.3 Fraction part of positive numbers</h3>
 
 The representation of floating point numbers is based on the <a href="http://en.wikipedia.org/wiki/Double_precision_floating-point_format">IEEE 764 Binary 64 standard representation</a>. This is also the representation used by Erlang:
 
-<pre lang="erlang">&lt;&lt;Sign:1, Exp:11, Frac:52&gt;&gt; = &lt;&lt;F/float&gt;&gt;</pre>
+<pre lang="erlang"><![CDATA[<<Sign:1, Exp:11, Frac:52>> = <<F/float>>]]></pre>
 
 The encoding extracts the integer part and encodes it as a positive integer
 (either pos4 or pos_big), flags the presence of a fraction part, and encodes
@@ -216,11 +217,11 @@ the fraction part as a binary (without the binary tag).
 
 <h3>2.6.1 Small negative numbers</h3>
 
-<pre lang="erlang">&lt;&lt; ?neg4:8, IRep:31, F:1 &gt;&gt;</pre>
+<pre lang="erlang"><![CDATA[<< ?neg4:8, IRep:31, F:1 >>]]></pre>
 
-A negative number I is encoded as IRep = Max + I, where Max is the largest 
-possible number that can be represented with the number of bits present for 
-the given subtype. For example, Max for neg4 is 0x7FFF FFFF (31 bits). 
+A negative number I is encoded as IRep = Max + I, where Max is the largest
+possible number that can be represented with the number of bits present for
+the given subtype. For example, Max for neg4 is 0x7FFF FFFF (31 bits).
 Keep in mind that I &lt; 0.
 
 The fraction flag is inverted, compared to the pos4 representation, so it will
@@ -228,16 +229,17 @@ be 1 if there is no fraction part; 0 otherwise.
 
 <h3>2.6.2 Large negative numbers</h3>
 
-Larger negative numbers are encoded as 
+Larger negative numbers are encoded as:
 
-<pre lang="erlang">{Words, Max} = get_max(-I),
-Bin = encode_bin_elems(list_to_binary(encode_big(Max + I)),
-WordsRep = 16#FFFFffff - Words,
-&lt;&lt; ?neg_big:8, WordsRep:32, Bin/binary, F:8 &gt;&gt;</pre>
+<pre lang="erlang"><![CDATA[encode_negbig(I) ->
+    {Words, Max} = get_max(-I),
+    Bin = encode_bin_elems(list_to_binary(encode_big(Max + I)),
+    WordsRep = 16#FFFFffff - Words,
+    << ?neg_big:8, WordsRep:32, Bin/binary, F:8 >>.]]></pre>
 
 That is, get_max() figures out how many 64-bit words are needed to represent
--I (the positive number), and also gives the maximum value that can be 
-represented in so many words. WordsRep in essence becomes a sub-subtag of 
+-I (the positive number), and also gives the maximum value that can be
+represented in so many words. WordsRep in essence becomes a sub-subtag of
 the negative bignum.
 
 <h3>2.6.3 Fraction of negative numbers</h3>
@@ -252,7 +254,7 @@ is similarly inverted.
 
 <h2>2.7 Atoms</h2>
 
-Atoms are encoded as the atom tag, followed by the string representation of 
+Atoms are encoded as the atom tag, followed by the string representation of
 the atom using the binary encoding described above (but without the binary
 tag).
 
@@ -260,12 +262,12 @@ tag).
 
 The encoding of references is perhaps best described by the code:
 
-<pre lang="erlang">encode_ref(R) -&gt;
+<pre lang="erlang"><![CDATA[encode_ref(R) ->
     RBin = term_to_binary(R),
-    &lt;&lt;131,114,_Len:16,100,NLen:16,Name:NLen/binary,Rest/binary&gt;&gt; = RBin,
+    <<131,114,_Len:16,100,NLen:16,Name:NLen/binary,Rest/binary>> = RBin,
     NameEnc = encode_bin_elems(Name),
     RestEnc = encode_bin_elems(Rest),
-    &lt;&lt;?reference, NameEnc/binary, RestEnc/binary&gt;&gt;.</pre>
+    <<?reference, NameEnc/binary, RestEnc/binary>>.]]></pre>
 
 where encode_bin_elems(B) encodes the argument B the same way as a binary
 (excluding the 'binary' type tag).
@@ -274,20 +276,20 @@ where encode_bin_elems(B) encodes the argument B the same way as a binary
 
 The encoding of ports is perhaps best described by the code:
 
-<pre lang="erlang">encode_port(P) -&gt;
+<pre lang="erlang"><![CDATA[encode_port(P) ->
     PBin = term_to_binary(P),
-    &lt;&lt;131,102,100,ALen:16,Name:ALen/binary,Rest:5/binary&gt;&gt; = PBin,
+    <<131,102,100,ALen:16,Name:ALen/binary,Rest:5/binary>> = PBin,
     NameEnc = encode_bin_elems(Name),
-    &lt;&lt;?port, NameEnc/binary, Rest/binary&gt;&gt;.</pre>
+    <<?port, NameEnc/binary, Rest/binary>>.]]></pre>
 
 <h2>2.10 Pids</h2>
 
 The encoding of ports is perhaps best described by the code:
 
-<pre lang="erlang">encode_pid(P) -&gt;
+<pre lang="erlang"><![CDATA[encode_pid(P) ->
     PBin = term_to_binary(P),
-    &lt;&lt;131,103,100,ALen:16,Name:ALen/binary,Rest:9/binary&gt;&gt; = PBin,
+    <<131,103,100,ALen:16,Name:ALen/binary,Rest:9/binary>> = PBin,
     NameEnc = encode_bin_elems(Name),
-    &lt;&lt;?pid, NameEnc/binary, Rest/binary&gt;&gt;.</pre>
+    <<?pid, NameEnc/binary, Rest/binary>>.]]></pre>
 
 @end

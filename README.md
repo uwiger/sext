@@ -5,7 +5,7 @@
 __Authors:__ Ulf Wiger ([`ulf@wiger.net`](mailto:ulf@wiger.net)).
 
 A sortable serialization library
-This library offers a serialization format (a la term_to_binary()) that 
+This library offers a serialization format (a la term_to_binary()) that
 preserves the Erlang term order.
 
 ```
@@ -149,18 +149,19 @@ type tag).
 ### 2.5.1 Positive small integers, pos4 ###
 
 Integers up to 31 bits are encoded as << ?pos4, I:31, F:1 >>
-where I is the integer value, and F is 1 if a fraction part follows; 
+where I is the integer value, and F is 1 if a fraction part follows;
 0 otherwise.
 
 
 ### 2.5.2 Positive large integers ###
 
-Larger integers are converted to a byte string and then encoded like 
-binaries (without the 'binary' type tag), followed by a byte signifying 
+Larger integers are converted to a byte string and then encoded like
+binaries (without the 'binary' type tag), followed by a byte signifying
 whether a fraction part follows (1 if yes; 0 otherwise).
 
 ```erlang
-Bytes = encode_big(I),<< ?pos_big, Bytes/binary, F:8 >>
+Bytes = encode_big(I),
+<< ?pos_big, Bytes/binary, F:8 >>
 ```
 
 
@@ -186,9 +187,9 @@ the fraction part as a binary (without the binary tag).
 << ?neg4:8, IRep:31, F:1 >>
 ```
 
-A negative number I is encoded as IRep = Max + I, where Max is the largest 
-possible number that can be represented with the number of bits present for 
-the given subtype. For example, Max for neg4 is 0x7FFF FFFF (31 bits). 
+A negative number I is encoded as IRep = Max + I, where Max is the largest
+possible number that can be represented with the number of bits present for
+the given subtype. For example, Max for neg4 is 0x7FFF FFFF (31 bits).
 Keep in mind that I < 0.
 
 The fraction flag is inverted, compared to the pos4 representation, so it will
@@ -197,7 +198,7 @@ be 1 if there is no fraction part; 0 otherwise.
 
 ### 2.6.2 Large negative numbers ###
 
-Larger negative numbers are encoded as 
+Larger negative numbers are encoded as:
 
 ```erlang
 {Words, Max} = get_max(-I),
@@ -207,8 +208,8 @@ WordsRep = 16#FFFFffff - Words,
 ```
 
 That is, get_max() figures out how many 64-bit words are needed to represent
--I (the positive number), and also gives the maximum value that can be 
-represented in so many words. WordsRep in essence becomes a sub-subtag of 
+-I (the positive number), and also gives the maximum value that can be
+represented in so many words. WordsRep in essence becomes a sub-subtag of
 the negative bignum.
 
 
@@ -225,7 +226,7 @@ is similarly inverted.
 
 ## 2.7 Atoms ##
 
-Atoms are encoded as the atom tag, followed by the string representation of 
+Atoms are encoded as the atom tag, followed by the string representation of
 the atom using the binary encoding described above (but without the binary
 tag).
 
@@ -236,9 +237,11 @@ The encoding of references is perhaps best described by the code:
 
 ```erlang
 encode_ref(R) ->
-    RBin = term_to_binary(R),<<131,114,_Len:16,100,NLen:16,Name:NLen/binary,Rest/binary>> = RBin,
+    RBin = term_to_binary(R),
+    <<131,114,_Len:16,100,NLen:16,Name:NLen/binary,Rest/binary>> = RBin,
     NameEnc = encode_bin_elems(Name),
-    RestEnc = encode_bin_elems(Rest),<<?reference, NameEnc/binary, RestEnc/binary>>.
+    RestEnc = encode_bin_elems(Rest),
+    <<?reference, NameEnc/binary, RestEnc/binary>>.
 ```
 
 where encode_bin_elems(B) encodes the argument B the same way as a binary
@@ -251,8 +254,10 @@ The encoding of ports is perhaps best described by the code:
 
 ```erlang
 encode_port(P) ->
-    PBin = term_to_binary(P),<<131,102,100,ALen:16,Name:ALen/binary,Rest:5/binary>> = PBin,
-    NameEnc = encode_bin_elems(Name),<<?port, NameEnc/binary, Rest/binary>>.
+    PBin = term_to_binary(P),
+    <<131,102,100,ALen:16,Name:ALen/binary,Rest:5/binary>> = PBin,
+    NameEnc = encode_bin_elems(Name),
+    <<?port, NameEnc/binary, Rest/binary>>.
 ```
 
 
@@ -262,8 +267,10 @@ The encoding of ports is perhaps best described by the code:
 
 ```erlang
 encode_pid(P) ->
-    PBin = term_to_binary(P),<<131,103,100,ALen:16,Name:ALen/binary,Rest:9/binary>> = PBin,
-    NameEnc = encode_bin_elems(Name),<<?pid, NameEnc/binary, Rest/binary>>.
+    PBin = term_to_binary(P),
+    <<131,103,100,ALen:16,Name:ALen/binary,Rest:9/binary>> = PBin,
+    NameEnc = encode_bin_elems(Name),
+    <<?pid, NameEnc/binary, Rest/binary>>.
 ```
 
 
