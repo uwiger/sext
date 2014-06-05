@@ -42,10 +42,26 @@ sorting properties while generating octet strings that are perfectly safe
 to use in file names.
 
 Another feature is "prefix encoding", which encodes a term and truncates
-the result if it encounters a "wildcard" (e.g. `'$n'`
+the result if it encounters a "wildcard" (e.g. `'$1'`
 or `'_'`). This is to enable a convenient and efficient mapping
 of Erlang match specifications to e.g. prefix matching on the external storage
 and subsequent match_spec matching on the found erlang terms.
+
+The serialization format supports all Erlang types, and preserves the
+internal Erlang term order, with a few exceptions:
+
+* Floats are represented based on the IEEE 764 Binary 64 standard
+representation. This is the representation used by Erlang, specifically
+the representation used when encoding floats in binaries. To be exact,
+`sext` first normalizes the float by encoding it as an Erlang binary, then
+serializes it.
+
+* In Erlang, integers are cast to floats before comparing them to a float.
+This means e.g. that the relative sort order of `1` and `1.0` is undefined.
+It is not possible for `sext` to preserve this ambiguity after serialization,
+since it could only be done by producing identical encodings for the two
+terms, thereby sacrificing the property that encoding a value and then
+decoding it again, should produce the initial value.
 
 
 # 2. Specification #
@@ -58,7 +74,7 @@ in the global Erlang term ordering. The number type is divided into several
 subtypes, to facilitate a reasonably efficient representation:
 
 
-<table border="1"><tr align="left"><th>Type</th><th>Description</th><th>Tag</th></tr><tr><td>negbig</td><td>Negative bignum</td><td>8</td></tr><tr><td>neg4</td><td>Negative 31-bit integer</td><td>9</td></tr><tr><td>pos4</td><td>Positive 31-bit integer</td><td>10</td></tr><tr><td>posbig</td><td>Positive bignum</td><td>11</td></tr><tr><td>atom</td><td>Obj of type atom()</td><td>12</td></tr><tr><td>reference</td><td>Obj of type reference()</td><td>13</td></tr><tr><td>port</td><td>Obj of type port()</td><td>14</td></tr><tr><td>pid</td><td>Obj of type pid()</td><td>15</td></tr><tr><td>reference</td><td>Obj of type list()</td><td>16</td></tr><tr><td>list</td><td>Obj of type list()</td><td>17</td></tr><tr><td>binary</td><td>Obj of type binary()</td><td>18</td></tr><tr><td>bin_tail</td><td>Improper-tail marker followed by binary or bitstring</td><td>19</td></tr>
+<table border="1"><tr align="left"><th>Type</th><th>Description</th><th>Tag</th></tr><tr><td>negbig</td><td>Negative bignum</td><td>8</td></tr><tr><td>neg4</td><td>Negative 31-bit integer</td><td>9</td></tr><tr><td>pos4</td><td>Positive 31-bit integer</td><td>10</td></tr><tr><td>posbig</td><td>Positive bignum</td><td>11</td></tr><tr><td>atom</td><td>Obj of type atom()</td><td>12</td></tr><tr><td>reference</td><td>Obj of type reference()</td><td>13</td></tr><tr><td>port</td><td>Obj of type port()</td><td>14</td></tr><tr><td>pid</td><td>Obj of type pid()</td><td>15</td></tr><tr><td>tuple</td><td>Obj of type tuple()</td><td>16</td></tr><tr><td>list</td><td>Obj of type list()</td><td>17</td></tr><tr><td>binary</td><td>Obj of type binary()</td><td>18</td></tr><tr><td>bin_tail</td><td>Improper-tail marker followed by binary or bitstring</td><td>19</td></tr>
 </table>
 
 
@@ -201,10 +217,11 @@ be 1 if there is no fraction part; 0 otherwise.
 Larger negative numbers are encoded as:
 
 ```erlang
-{Words, Max} = get_max(-I),
-Bin = encode_bin_elems(list_to_binary(encode_big(Max + I)),
-WordsRep = 16#FFFFffff - Words,
-<< ?neg_big:8, WordsRep:32, Bin/binary, F:8 >>
+encode_negbig(I) ->
+    {Words, Max} = get_max(-I),
+    Bin = encode_bin_elems(list_to_binary(encode_big(Max + I)),
+    WordsRep = 16#FFFFffff - Words,
+    << ?neg_big:8, WordsRep:32, Bin/binary, F:8 >>.
 ```
 
 That is, get_max() figures out how many 64-bit words are needed to represent

@@ -34,10 +34,26 @@ sorting properties while generating octet strings that are perfectly safe
 to use in file names.
 
 Another feature is "prefix encoding", which encodes a term and truncates
-the result if it encounters a "wildcard" (e.g. <code>'$n'</code>
+the result if it encounters a "wildcard" (e.g. <code>'$1'</code>
 or <code>'_'</code>). This is to enable a convenient and efficient mapping
 of Erlang match specifications to e.g. prefix matching on the external storage
 and subsequent match_spec matching on the found erlang terms.
+
+The serialization format supports all Erlang types, and preserves the
+internal Erlang term order, with a few exceptions:
+
+* Floats are represented based on the IEEE 764 Binary 64 standard
+representation. This is the representation used by Erlang, specifically
+the representation used when encoding floats in binaries. To be exact,
+`sext' first normalizes the float by encoding it as an Erlang binary, then
+serializes it.
+
+* In Erlang, integers are cast to floats before comparing them to a float.
+This means e.g. that the relative sort order of `1' and `1.0' is undefined.
+It is not possible for `sext' to preserve this ambiguity after serialization,
+since it could only be done by producing identical encodings for the two
+terms, thereby sacrificing the property that encoding a value and then
+decoding it again, should produce the initial value.
 
 <h1>2. Specification</h1>
 
@@ -94,8 +110,8 @@ subtypes, to facilitate a reasonably efficient representation:
   <td>15</td>
  </tr>
  <tr>
-  <td>reference</td>
-  <td>Obj of type list()</td>
+  <td>tuple</td>
+  <td>Obj of type tuple()</td>
   <td>16</td>
  </tr>
  <tr>
