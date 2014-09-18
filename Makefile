@@ -16,27 +16,34 @@
 ## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 ## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 ## THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING 
+## LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 ## FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 ## DEALINGS IN THE SOFTWARE.
 
-.PHONY: all compile clean eunit test eqc doc
+.PHONY: all compile clean realclean eunit test eqc doc deps
 
-DIRS=src 
+DIRS=src
+REBAR=$(shell which rebar || echo ./rebar)
 
 all: compile
 
-compile:
-	./rebar compile
+deps:
+	${REBAR} get-deps
 
+compile: deps
+	${REBAR} compile
 
 clean:
-	./rebar clean
+	${REBAR} clean
+
+realclean:
+	${REBAR} clean
+	rm -f doc/*.md doc/edoc-info doc/erlang.png doc/stylesheet.css
 
 eunit:
-	./rebar eunit
+	${REBAR} eunit
 
 test: eunit
 
 doc:
-	./rebar doc
+	${REBAR} get-deps compile doc
