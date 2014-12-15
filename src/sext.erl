@@ -60,12 +60,12 @@
 
 -define(IMAX1, 16#ffffFFFFffffFFFF).
 
--define(dbg(Fmt,Args),
-        case get(dbg) of
-            true -> io:fwrite("~p: " ++ Fmt, [?LINE|Args]);
-            _ -> no_dbg
-        end).
-%%-define(dbg(F,A),no_debug).
+%% -define(dbg(Fmt,Args),
+%%         case get(dbg) of
+%%             true -> io:fwrite("~p: " ++ Fmt, [?LINE|Args]);
+%%             _ -> no_dbg
+%%         end).
+-define(dbg(F,A),no_debug).
 
 %% @spec encode(T::term()) -> binary()
 %% @doc Encodes any Erlang term into a binary.
