@@ -58,7 +58,7 @@
             X==?binary;
             X==?bin_tail).
 
--define(IMAX1, 16#ffffFFFFffffFFFF).
+-define(IMAX1_SIGN, 16#7FFFFFFFFFFFFFFF).
 
 %% -define(dbg(Fmt,Args),
 %%         case get(dbg) of
@@ -500,7 +500,7 @@ int_to_binary(I) ->
 %%     {H, T}.
 
 encode_big_neg(I) ->
-    {Words, Max} = get_max(-I),
+    {Words, Max} = get_max_sign(-I),
     ?dbg("Words = ~p | Max = ~p~n", [Words,Max]),
     Iadj = Max + I,             % keep in mind that I < 0
     ?dbg("IAdj = ~p~n", [Iadj]),
@@ -880,7 +880,7 @@ decode_neg_big(Bin) ->
     ISz = size(Ib) * 8,
     <<I0:ISz>> = Ib,
     ?dbg("I0 = ~p~n", [I0]),
-    Max = imax(Words),
+    Max = imax_sign(Words),
     ?dbg("Max = ~p~n", [Max]),
     I = Max - I0,
     ?dbg("I = ~p~n", [I]),
@@ -950,15 +950,15 @@ max_value(Sz) ->
     (1 bsl Sz) - 1.
 
 %% The largest value that fits in Words*64 bits.
-imax(1) -> max_value(64);
-imax(2) -> max_value(128);
-imax(Words) -> max_value(Words*64).
+imax_sign(1) -> max_value(63);
+imax_sign(2) -> max_value(127);
+imax_sign(Words) -> max_value(Words*64-1).
 
 %% Get the smallest imax/1 value that's larger than I.
-get_max(I) -> get_max(I, 1, imax(1)).
-get_max(I, W, Max) when I > Max ->
-    get_max(I, W+1, (Max bsl 64) bor ?IMAX1);
-get_max(_, W, Max) ->
+get_max_sign(I) -> get_max_sign(I, 1, imax_sign(1)).
+get_max_sign(I, W, Max) when I > Max ->
+    get_max_sign(I, W+1, (Max bsl 63) bor ?IMAX1_SIGN);
+get_max_sign(_, W, Max) ->
     {W, Max}.
 
 %% @spec to_sb32(Bits::bitstring()) -> binary()
