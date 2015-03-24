@@ -370,7 +370,8 @@ encode_float(F) ->
             encode_int(Int0, Fraction)
     end.
 
-
+encode_neg_int(Int, Fraction)->
+    encode_neg_int(Int, Fraction,false).
 encode_int(I, R) ->
     encode_int(I, R, false).
 
@@ -405,10 +406,10 @@ encode_int(I,R, Legacy) when I > 16#7fffffff ->
                     <<?posbig, Bytes/binary, 1:8, Rbits/binary>>
             end
     end;
-encode_int(I, R, _Legacy) when I < 0 ->
-    encode_neg_int(I, R).
+encode_int(I, R,  Legacy) when I < 0 ->
+    encode_neg_int(I, R,Legacy).
 
-encode_neg_int(I,R) when I =< 0, I >= -16#7fffffff ->
+encode_neg_int(I,R,_Legacy) when I =< 0, I >= -16#7fffffff ->
     ?dbg("encode_neg_int(~p, ~p [sz: ~p])~n", [I,pp(R), try bit_size(R) catch error:_ -> "***" end]),
     Adj = max_value(31) + I,    % keep in mind that I < 0
     ?dbg("Adj = ~p~n", [erlang:integer_to_list(Adj,2)]),
@@ -419,9 +420,9 @@ encode_neg_int(I,R) when I =< 0, I >= -16#7fffffff ->
             ?dbg("R = ~p -> RBits = ~p~n", [pp(R), pp(Rbits)]),
             << ?neg4, Adj:31, 0:1, Rbits/binary >>
     end;
-encode_neg_int(I,R) when I < -16#7fFFffFF ->
+encode_neg_int(I,R,Legacy) when I < -16#7fFFffFF ->
     ?dbg("encode_neg_int(BIG ~p)~n", [I]),
-    Bytes = encode_big_neg(I),
+    Bytes = encode_big_neg(I,Legacy),
     ?dbg("Bytes = ~p~n", [Bytes]),
     if R == none ->
             <<?negbig, Bytes/binary, 16#ff:8>>;
@@ -499,12 +500,12 @@ int_to_binary(I) ->
 %% decode_size(<<0:1, H:7, T/binary>>) ->
 %%     {H, T}.
 
-encode_big_neg(I) ->
+encode_big_neg(I,Legacy) ->
     {Words, Max} = get_max(-I),
     ?dbg("Words = ~p | Max = ~p~n", [Words,Max]),
     Iadj = Max + I,             % keep in mind that I < 0
     ?dbg("IAdj = ~p~n", [Iadj]),
-    Bin = encode_bin_elems(list_to_binary(encode_big1(Iadj))),
+    Bin = encode_big(Iadj,Legacy),
     ?dbg("Bin = ~p~n", [Bin]),
     WordsAdj = 16#ffffFFFF - Words,
     ?dbg("WordsAdj = ~p~n", [WordsAdj]),
@@ -875,7 +876,8 @@ decode_neg_big(Bin) ->
     <<WordsAdj:32, Rest/binary>> = Bin,
     Words = 16#ffffFFFF - WordsAdj,
     ?dbg("Words = ~p~n", [Words]),
-    {Ib, Rest1} = decode_binary(Rest),
+    {Ib0, Rest1} = decode_binary(Rest),
+    Ib = remove_size_bits(Ib0),
     ?dbg("Ib = ~p | Rest1 = ~p~n", [Ib, Rest1]),
     ISz = size(Ib) * 8,
     <<I0:ISz>> = Ib,
