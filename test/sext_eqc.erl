@@ -47,8 +47,11 @@ sext_test_() ->
      [
       fun() -> t(run(N, prop_encode, fun prop_encode/0)) end
       , fun() -> t(run(N, prop_decode_legacy_big, fun prop_decode_legacy_big/0)) end
+      , fun() -> t(run(N, prop_decode_legacy_neg_big, fun prop_decode_legacy_neg_big/0)) end
       , fun() -> t(run(N, prop_prefix_equiv,fun prop_prefix_equiv/0))end
       , fun() -> t(run(N, prop_sort, fun prop_sort/0)) end
+      , fun() -> t(run(N, prop_sort_big, fun prop_sort_big/0)) end
+      , fun() -> t(run(N, prop_sort_neg_big, fun prop_sort_neg_big/0)) end
       , fun() -> t(run(N, prop_encode_sb32, fun prop_encode_sb32/0)) end
       , fun() -> t(run(N, prop_sort_sb32, fun prop_sort_sb32/0)) end
       , fun() -> t(run(N, prop_partial_decode1, fun prop_partial_decode1/0)) end
@@ -81,10 +84,12 @@ run(Num) ->
     [
      run  (Num, prop_encode , fun prop_encode/0)
      , run(Num, prop_decode_legacy_big, fun prop_decode_legacy_big/0)
+     , run(Num, prop_decode_legacy_neg_big, fun prop_decode_legacy_neg_big/0)
      , run(Num, prop_prefix_equiv,fun prop_prefix_equiv/0)
      %% , run(Num, prop_prefix_equiv,fun prop_prefix_equiv/0)
      , run(Num, prop_sort , fun prop_sort/0)
      , run(Num, prop_sort_big, fun prop_sort_big/0)
+     , run(Num, prop_sort_neg_big, fun prop_sort_neg_big/0)
      , run(Num, prop_encode_sb32, fun prop_encode_sb32/0)
      , run(Num, prop_sort_sb32 , fun prop_sort_sb32/0)
      , run(Num, prop_partial_decode1, fun prop_partial_decode1/0)
@@ -119,6 +124,14 @@ prop_sort() ->
 
 prop_sort_big() ->
     ?FORALL({T1,T2}, {big(), big()},
+            begin
+                {X1,X2} = {sext:encode(T1), sext:encode(T2)},
+                collect(size(term_to_binary({T1,T2})),
+                        comp(X1,X2) == comp_i(T1,T2))
+            end).
+
+prop_sort_neg_big() ->
+    ?FORALL({T1,T2}, {neg_big(), neg_big()},
             begin
                 {X1,X2} = {sext:encode(T1), sext:encode(T2)},
                 collect(size(term_to_binary({T1,T2})),
@@ -162,6 +175,10 @@ prop_encode() ->
 
 prop_decode_legacy_big() ->
     ?FORALL(T, big(),
+	    sext:decode(sext:encode(T, true)) == T).
+
+prop_decode_legacy_neg_big() ->
+    ?FORALL(T, neg_big(),
 	    sext:decode(sext:encode(T, true)) == T).
 
 prop_encode_sb32() ->
