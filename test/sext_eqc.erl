@@ -67,6 +67,7 @@ sext_test_() ->
       , fun() -> t(run(N, prop_is_prefix_hex1, fun prop_is_prefix_hex1/0)) end
       , fun() -> t(run(N, prop_is_prefix_hex2, fun prop_is_prefix_hex2/0)) end
       , fun() -> t(run(N,prop_non_proper_sorts,fun prop_non_proper_sorts/0)) end
+      , fun() -> t(run(N, prop_sort_lists_of_tuples, fun prop_sort_lists_of_tuples/0)) end
      ]}.
 
 t({_Lbl, Res}) ->
@@ -99,6 +100,7 @@ run(Num) ->
      , run(Num, prop_is_prefix1, fun prop_is_prefix1/0)
      , run(Num, prop_is_prefix2, fun prop_is_prefix2/0)
      , run(Num, prop_non_proper_sorts, fun prop_non_proper_sorts/0)
+     , run(Num, prop_sort_lists_of_tuples, fun prop_sort_lists_of_tuples/0)
     ].
 
 run(Num, Lbl, F) ->
@@ -328,6 +330,39 @@ prop_non_proper_sorts() ->
                     == [J || {_,J} <- Sorted2]
             end).
 
+% Generators for prop_sort_list_of_tuples
+type() ->
+    oneof([{float, fun eqc_gen:real/0},
+           {int, fun eqc_gen:largeint/0}
+           %% {binary, fun eqc_gen:binary/0},
+           %% {binary, fun() -> list(char()) end}
+]).
+
+schema() ->
+    list(type()).
+
+key(Schema) ->
+    [{T, G()} || {T, G} <- Schema].
+
+keys() ->
+    ?LET(S, schema(), non_empty(list(key(S)))).
+
+prop_sort_lists_of_tuples() ->
+    ?FORALL(Keys0, keys(),
+            begin
+                Keys = lists:usort(Keys0),
+                Seq = lists:seq(1, length(Keys)),
+                KeySeq = lists:zip(Keys, Seq),
+                BinKeySeq = lists:sort([{sext:encode(K), S} || {K, S} <- KeySeq]),
+                %% BinKeySeq = lists:sort([{encode_key(K), S} || {K, S} <- KeySeq]),
+                {_, BinSeq} = lists:unzip(BinKeySeq),
+                ?WHENFAIL(
+                   io:format("KeySeq = ~p\nBinKeySeq = ~p\n", [KeySeq, BinKeySeq]),
+                   equals(BinSeq, Seq))
+            end).
+
+
+
 prop_encode_neg_fs() ->
     ?FORALL(T, neg_float(),
             sext:decode(sext:encode(T)) == T).
@@ -340,6 +375,8 @@ prop_encode_neg_big() ->
     ?FORALL(T, neg_big(),
             sext:decode(sext:encode(T)) == T).
 
+
+    
 
 comp(A,B) when A == B, A =/= B ->
     %% can only happen when either is a float and the other an int
