@@ -1,0 +1,29 @@
+%% -*- erlang -*-
+%%
+%% If we compile with rebar3, we will use Port Compiler plugin as an interface
+%% to building C code. Additionaly add src dir.
+%%
+
+Script = escript:script_name(),
+case filename:basename(Script) of
+    "rebar3" ->
+		lists:keydelete(src_dirs, 1, CONFIG)
+		 ++
+			[
+			 {src_dirs, ["src","examples"]},
+
+			 {plugins, [pc]},
+
+			 {provider_hooks,
+			  [
+			   {pre,
+			    [
+			     {compile, {pc, compile}},
+			     {clean, {pc, clean}}
+			    ]
+			   }
+			  ]
+			}];
+    _ ->
+		CONFIG
+end.
