@@ -1,29 +1,18 @@
 %% -*- erlang -*-
-%%
-%% If we compile with rebar3, we will use Port Compiler plugin as an interface
-%% to building C code. Additionaly add src dir.
-%%
-
-Script = escript:script_name(),
-case filename:basename(Script) of
-    "rebar3" ->
-		lists:keydelete(src_dirs, 1, CONFIG)
-		 ++
-			[
-			 {src_dirs, ["src","examples"]},
-
-			 {plugins, [pc]},
-
-			 {provider_hooks,
-			  [
-			   {pre,
-			    [
-			     {compile, {pc, compile}},
-			     {clean, {pc, clean}}
-			    ]
-			   }
-			  ]
-			}];
-    _ ->
-		CONFIG
+IsRebar3 = erlang:function_exported(rebar3, main, 1),
+case IsRebar3 of
+  true ->
+    CONFIG;
+  false ->
+    Rebar2Config = [
+                    {deps, [{edown, ".*",
+                             {git, "git://github.com/uwiger/edown.git", "HEAD"}}]},
+                    {src_dirs, ["examples"]},
+                    {edoc_opts, [{doclet, edown_doclet},
+                                 {src_path, ["src/", "examples/"]},
+                                 {app_default, "http://www.erlang.org/doc/man"},
+                                 {top_level_readme,
+                                  {"./README.md",
+                                   "http://github.com/uwiger/sext"}}]}],
+    CONFIG = CONFIG ++ Rebar2Config
 end.
