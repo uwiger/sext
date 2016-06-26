@@ -1,5 +1,6 @@
-                                                %==============================================================================
-%% Copyright 2010 Erlang Solutions Ltd.
+%% -*- erlang-indent-level: 4; indent-tabs-mode: nil -*-
+%%==============================================================================
+%% Copyright 2014-16 Ulf Wiger
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -36,9 +37,9 @@
 
 get_n(Default) ->
     case os:getenv("SEXT_TESTS") of
-	false -> Default;
-	Res ->
-	    list_to_integer(Res)
+        false -> Default;
+        Res ->
+            list_to_integer(Res)
     end.
 
 sext_test_() ->
@@ -57,9 +58,9 @@ sext_test_() ->
       , fun() -> t(run(N, prop_partial_decode1, fun prop_partial_decode1/0)) end
       , fun() -> t(run(N, prop_partial_decode2, fun prop_partial_decode2/0)) end
       , fun() -> t(run(N, prop_partial_decode_plus1,
-		       fun prop_partial_decode_plus1/0)) end
+                       fun prop_partial_decode_plus1/0)) end
       , fun() -> t(run(N, prop_partial_decode_plus2,
-		       fun prop_partial_decode_plus2/0)) end
+                       fun prop_partial_decode_plus2/0)) end
       , fun() -> t(run(N, prop_is_prefix1, fun prop_is_prefix1/0)) end
       , fun() -> t(run(N, prop_is_prefix2, fun prop_is_prefix2/0)) end
       , fun() -> t(run(N, prop_encode_hex, fun prop_encode_hex/0)) end
@@ -175,11 +176,11 @@ prop_encode() ->
 
 prop_decode_legacy_big() ->
     ?FORALL(T, big(),
-	    sext:decode(sext:encode(T, true)) == T).
+            sext:decode(sext:encode(T, true)) == T).
 
 prop_decode_legacy_neg_big() ->
     ?FORALL(T, neg_big(),
-	    sext:decode(sext:encode(T, true)) == T).
+            sext:decode(sext:encode(T, true)) == T).
 
 prop_encode_sb32() ->
     ?FORALL(T, term_(),
@@ -196,52 +197,52 @@ prop_prefix_equiv() ->
 %% Partial-decoding a whole term should give the term back
 prop_partial_decode1() ->
     ?FORALL(T, term_(),
-	    begin
-		Enc = sext:encode(T),
-		{full, Dec, Rest} = sext:partial_decode(Enc),
-		Dec == T andalso Rest == <<>>
-	    end).
+            begin
+                Enc = sext:encode(T),
+                {full, Dec, Rest} = sext:partial_decode(Enc),
+                Dec == T andalso Rest == <<>>
+            end).
 
 %% Partial-decoding a prefix should give a _comparable_ prefix back
 prop_partial_decode2() ->
     ?FORALL(Pat, wild_pat(),
-	    begin
-		Pfx = sext:prefix(Pat),
-		case sext:partial_decode(Pfx) of
-		    {full, _, _} -> true;
-		    {partial, Dec, Rest} ->
-			comp_pat(Dec, Pat) andalso Rest == <<>>
-		end
-	    end).
+            begin
+                Pfx = sext:prefix(Pat),
+                case sext:partial_decode(Pfx) of
+                    {full, _, _} -> true;
+                    {partial, Dec, Rest} ->
+                        comp_pat(Dec, Pat) andalso Rest == <<>>
+                end
+            end).
 
 %% A sext term followed by something not sext-encoded
 prop_partial_decode_plus1() ->
     ?FORALL(T, term_(),
-	    begin
-		Enc = sext:encode(T),
-		{full, Dec, <<"foo">>} =
-		    sext:partial_decode(<<Enc/binary, "foo">>),
-		Dec == T
-	    end).
+            begin
+                Enc = sext:encode(T),
+                {full, Dec, <<"foo">>} =
+                    sext:partial_decode(<<Enc/binary, "foo">>),
+                Dec == T
+            end).
 
 %% A sext prefix followed by something not sext-encoded
 prop_partial_decode_plus2() ->
     ?FORALL(Pat, wild_pat(),
-	    begin
-		Pfx = sext:prefix(Pat),
-		case sext:partial_decode(<<Pfx/binary, "foo">>) of
-		    {full, Dec, <<"foo">>} ->
-			Dec == Pat;
-		    {partial, Dec, <<"foo">>} ->
-			comp_pat(Dec, Pat)
-		end
-	    end).
+            begin
+                Pfx = sext:prefix(Pat),
+                case sext:partial_decode(<<Pfx/binary, "foo">>) of
+                    {full, Dec, <<"foo">>} ->
+                        Dec == Pat;
+                    {partial, Dec, <<"foo">>} ->
+                        comp_pat(Dec, Pat)
+                end
+            end).
 
 wild_pat() ->
     ?LET({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
-			   positions(Tp) > 0),wild()},
-	 ?LET(P, choose(1, positions(T)),
-	      make_wild(T, P, W))).
+                           positions(Tp) > 0),wild()},
+         ?LET(P, choose(1, positions(T)),
+              make_wild(T, P, W))).
 
 comp_pat(X, X) -> true;
 comp_pat(A, B) when is_tuple(A), is_tuple(B), size(A) == size(B) ->
@@ -250,27 +251,27 @@ comp_pat(Dec, Pat) when is_list(Dec), is_list(Pat) ->
     comp_pat_l(Dec, Pat);
 comp_pat(A, B) ->  % A: decoded; B: prefix
     case {is_wild(A), is_wild(B)} of
-	{true, true} -> true;
-	{true, false} ->
-	    case B of
-		[H|_] ->
-		    %% This is because the decoded prefix of [] and ['_'|'_']
-		    %% are both '_'
-		    is_wild(H);
-		_ -> false
-	    end;
-	_ ->
-	    false
+        {true, true} -> true;
+        {true, false} ->
+            case B of
+                [H|_] ->
+                    %% This is because the decoded prefix of [] and ['_'|'_']
+                    %% are both '_'
+                    is_wild(H);
+                _ -> false
+            end;
+        _ ->
+            false
     end.
 
 comp_pat_l([H1|T1], [H2|T2]) ->
     case is_wild(H1) of
-	true -> true;
-	false ->
-	    case comp_pat(H1, H2) of
-		true  -> comp_pat_l(T1, T2);
-		false -> false
-	    end
+        true -> true;
+        false ->
+            case comp_pat(H1, H2) of
+                true  -> comp_pat_l(T1, T2);
+                false -> false
+            end
     end;
 comp_pat_l([], []) -> true;
 comp_pat_l(A, _) ->
@@ -502,15 +503,15 @@ positions(_, Acc) ->
 is_wild('_') -> true;
 is_wild(A) when is_atom(A) ->
     case atom_to_list(A) of
-	"\$" ++ Is ->
-	    try _ = list_to_integer(Is),
-		  true
-	    catch
-		error:_ ->
-		    false
-	    end;
-	_ ->
-	    false
+        "\$" ++ Is ->
+            try _ = list_to_integer(Is),
+                  true
+            catch
+                error:_ ->
+                    false
+            end;
+        _ ->
+            false
     end;
 is_wild(_) ->
     false.

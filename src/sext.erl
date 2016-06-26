@@ -1,6 +1,6 @@
 %% -*- erlang-indent-level: 4; indent-tabs-mode: nil
 %%==============================================================================
-%% Copyright 2014 Ulf Wiger
+%% Copyright 2014-16 Ulf Wiger
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 -export([to_sb32/1, from_sb32/1]).
 -export([to_hex/1, from_hex/1]).
 
+-export([pp/1]).  % for debugging only
 
 -define(negbig   , 8).
 -define(neg4     , 9).
