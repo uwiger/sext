@@ -1,6 +1,5 @@
 %% -*- erlang -*-
 IsRebar3 = erlang:function_exported(rebar3, main, 1),
-io:fwrite("IsRebar3 = ~p~n", [IsRebar3]).
 case IsRebar3 of
   true ->
     CONFIG;
