@@ -14,5 +14,5 @@ case IsRebar3 of
                                  {top_level_readme,
                                   {"./README.md",
                                    "http://github.com/uwiger/sext"}}]}],
-    CONFIG = CONFIG ++ Rebar2Config
+    CONFIG ++ Rebar2Config
 end.
