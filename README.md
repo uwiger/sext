@@ -1,5 +1,3 @@
-
-
 # The sext application #
 
 __Authors:__ Ulf Wiger ([`ulf@wiger.net`](mailto:ulf@wiger.net)).
@@ -10,7 +8,7 @@ preserves the Erlang term order.
 
 ```
 
-Copyright 2010 Erlang Solutions Ltd.
+Copyright 2014 Ulf Wiger
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

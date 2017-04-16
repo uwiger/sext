@@ -1,0 +1,18 @@
+%% -*- erlang -*-
+IsRebar3 = erlang:function_exported(rebar3, main, 1),
+case IsRebar3 of
+  true ->
+    CONFIG;
+  false ->
+    Rebar2Config = [
+                    {deps, [{edown, ".*",
+                             {git, "git://github.com/uwiger/edown.git", "HEAD"}}]},
+                    {src_dirs, ["examples"]},
+                    {edoc_opts, [{doclet, edown_doclet},
+                                 {src_path, ["src/", "examples/"]},
+                                 {app_default, "http://www.erlang.org/doc/man"},
+                                 {top_level_readme,
+                                  {"./README.md",
+                                   "http://github.com/uwiger/sext"}}]}],
+    CONFIG ++ Rebar2Config
+end.
