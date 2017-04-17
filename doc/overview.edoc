@@ -116,6 +116,11 @@ subtypes, to facilitate a reasonably efficient representation:
  </tr>
  <tr>
   <td>list</td>
+  <td>Obj of type map()</td>
+  <td>17, 1</td>
+ </tr>
+ <tr>
+  <td>list</td>
   <td>Obj of type list()</td>
   <td>17</td>
  </tr>
@@ -307,5 +312,14 @@ The encoding of ports is perhaps best described by the code:
     <<131,103,100,ALen:16,Name:ALen/binary,Rest:9/binary>> = PBin,
     NameEnc = encode_bin_elems(Name),
     <<?pid, NameEnc/binary, Rest/binary>>.]]></pre>
+
+<h2>2.11 Maps</h2>
+
+The encoding of maps is currently experimental.
+
+Maps sort between tuples and lists. Since the smallest list is represented
+by `<<17, 2>>', maps encoding starts with `<<17, 1>>' (introducing a new tag
+would break backwards compatibility), followed by the size of the map (4 bytes),
+and each Key-Value pair in the map.
 
 @end

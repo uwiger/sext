@@ -90,6 +90,7 @@ encode(X) -> encode(X, false).
 %% Use only as transition support. This function will be deprecated in time.
 %% @end
 encode(X, Legacy) when is_tuple(X)  -> encode_tuple(X, Legacy);
+encode(X, Legacy) when is_map(X)    -> encode_map(X, Legacy);
 encode(X, Legacy) when is_list(X)   -> encode_list(X, Legacy);
 encode(X, _) when is_pid(X)         -> encode_pid(X);
 encode(X, _) when is_port(X)        -> encode_port(X);
@@ -273,6 +274,15 @@ encode_list(L, Legacy) ->
 
 prefix_list(L) ->
     prefix_list_elems(L, <<?list>>).
+
+encode_map(M, Legacy) ->
+    Sz = map_size(M),
+    maps:fold(
+      fun(K,V,Acc) ->
+              <<Acc/binary, (encode(K, Legacy))/binary,
+                (encode(V, Legacy))/binary>>
+      end, <<?list, 1:8, Sz:32>>, M).
+
 
 encode_binary(B)    ->
     Enc = encode_bin_elems(B),
@@ -650,6 +660,9 @@ decode_next(<<?pid, Rest/binary>>) -> decode_pid(Rest);
 decode_next(<<?port, Rest/binary>>) -> decode_port(Rest);
 decode_next(<<?reference,Rest/binary>>) -> decode_ref(Rest);
 decode_next(<<?tuple,Sz:32, Rest/binary>>) -> decode_tuple(Sz,Rest);
+%% decode_next(<<?nil, Rest/binary>>) -> {[], Rest};
+%% decode_next(<<?old_list, Rest/binary>>) -> decode_list(Rest);
+decode_next(<<?list, 1, Rest/binary>>) -> decode_map(Rest);
 decode_next(<<?list, Rest/binary>>) -> decode_list(Rest);
 decode_next(<<?negbig, Rest/binary>>) -> decode_neg_big(Rest);
 decode_next(<<?posbig, Rest/binary>>) -> decode_pos_big(Rest);
@@ -752,6 +765,17 @@ partial_decode_list(<<X,_/binary>> = Next, Acc) when ?is_sext(X) ->
     end;
 partial_decode_list(Rest, Acc) ->
     {partial, lists:reverse(Acc) ++ '_', Rest}.
+
+decode_map(<<Sz:32, Rest/binary>>) ->
+    decode_map(Sz, Rest, #{}).
+
+decode_map(0, Rest, M) ->
+    {M, Rest};
+decode_map(N, Bin, M) ->
+    {K, Bin1} = decode_next(Bin),
+    {V, Bin2} = decode_next(Bin1),
+    decode_map(N-1, Bin2, maps:put(K, V, M)).
+
 
 decode_list(Elems) ->
     decode_list(Elems, []).
