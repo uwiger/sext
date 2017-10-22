@@ -277,11 +277,11 @@ prefix_list(L) ->
 
 encode_map(M, Legacy) ->
     Sz = map_size(M),
-    maps:fold(
-      fun(K,V,Acc) ->
+    lists:foldl(
+      fun({K,V},Acc) ->
               <<Acc/binary, (encode(K, Legacy))/binary,
                 (encode(V, Legacy))/binary>>
-      end, <<?list, 1:8, Sz:32>>, M).
+      end, <<?list, 1:8, Sz:32>>, maps:to_list(M)).
 
 
 encode_binary(B)    ->
