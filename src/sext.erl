@@ -281,7 +281,7 @@ encode_map(M, Legacy) ->
       fun({K,V},Acc) ->
               <<Acc/binary, (encode(K, Legacy))/binary,
                 (encode(V, Legacy))/binary>>
-      end, <<?list, 1:8, Sz:32>>, maps:to_list(M)).
+      end, <<?list, 1:8, Sz:32>>, lists:sort(maps:to_list(M))).
 
 
 encode_binary(B)    ->
