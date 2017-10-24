@@ -32,6 +32,24 @@
 
 -export([pp/1]).  % for debugging only
 
+%% The following sub-codes are used when encoding map keys.
+%% Map keys depart from the standard Erlang term sort order, in that floats are
+%% always sorted higher than ints (i.e. -1.0 is higher than a positiv bignum.)
+%% To accomodate this, we make use of some spare bits below the smallest atom:
+%% The empty atom ('') is encoded as <<?atom, 8>>. We need 4 bits to represent
+%% negative big floats, neg floats, pos floats and pos big floats.
+%% These are only used when encoding map keys, and to mark that context, we
+%% overload the (should-be deprecated) `Legacy' parameter. The decode
+%% will simply decode these as normal floats.
+%%
+%% (Of course, it's really time for a new tag scheme, which doesn't have to
+%% overload type tags, as is done here for maps and map keys. Still, there's
+%% something to be said for being backwards compatible too.)
+-define(mk_negbig, 0).
+-define(mk_neg   , 1).
+-define(mk_pos   , 2).
+-define(mk_posbig, 3).
+
 -define(negbig   , 8).
 -define(neg4     , 9).
 -define(pos4     , 10).
@@ -46,7 +64,7 @@
 -define(bin_tail , 19).
 
 -define(is_sext(X),
-        X==?negbig;
+	    X==?negbig;
             X==?neg4;
             X==?pos4;
             X==?posbig;
@@ -77,7 +95,7 @@
 %%
 encode(X) -> encode(X, false).
 
-%% @spec encode(T::term(), Legacy::boolean()) -> binary()
+%% @spec encode(T::term(), Legacy::boolean() | map_key) -> binary()
 %% @doc Encodes an Erlang term using legacy bignum encoding.
 %% On March 4 2013, Basho noticed that encoded bignums didn't always sort
 %% properly. This bug has been fixed, but the encoding of bignums necessarily
@@ -163,6 +181,7 @@ prefix(X) ->
     P.
 
 enc_prefix(X) when is_tuple(X)     -> prefix_tuple(X);
+enc_prefix(X) when is_map(X)       -> prefix_map(X);
 enc_prefix(X) when is_list(X)      -> prefix_list(X);
 enc_prefix(X) when is_pid(X)       -> {false, encode_pid(X)};
 enc_prefix(X) when is_port(X)      -> {false, encode_port(X)};
@@ -177,6 +196,11 @@ enc_prefix(X) when is_atom(X) ->
         false ->
             {false, encode_atom(X)}
     end.
+
+enc_key_prefix(X) when is_integer(X) -> {false, encode_number(X, map_key)};
+enc_key_prefix(X) when is_float(X)   -> {false, encode_number(X, map_key)};
+enc_key_prefix(X) -> 
+    enc_prefix(X).
 
 %% @spec prefix_sb32(X::term()) -> binary()
 %% @doc Generates an sb32-encoded binary for prefix matching.
@@ -232,7 +256,12 @@ decode_hex(Data) ->
 
 pp(none) -> "<none>";
 pp(B) when is_bitstring(B) ->
-    [ $0 + I || <<I:1>> <= B ].
+    intersperse([ $0 + I || <<I:1>> <= B ]).
+
+intersperse([_,_,_,_,_,_,_,_] = L) ->
+    L;
+intersperse([A,B,C,D,E,F,G,H|T]) ->
+    [A,B,C,D,E,F,G,H,$. | intersperse(T)].
 
 encode_tuple(T, Legacy) ->
     Sz = size(T),
@@ -269,6 +298,27 @@ prefix_tuple_elems([H|T], Acc) ->
 prefix_tuple_elems([], Acc) ->
     {false, Acc}.
 
+prefix_map(M) ->
+    Elems = lists:sort(maps:to_list(M)),
+    {Res, Sz, Enc} = prefix_map_elems(Elems, 0, <<>>),
+    {Res, <<?list, 1:8, Sz:32, Enc/binary>>}.
+
+prefix_map_elems([{K, V}|T], Sz, Acc) ->
+    case enc_key_prefix(K) of
+	{true, _} ->
+	    erlang:error(badarg);
+	{false, Ek} ->
+	    case enc_prefix(V) of
+		{true, Pv} ->
+		    {true, Sz+1, <<Acc/binary, Ek/binary, Pv/binary>>};
+		{false, Ev} ->
+		    prefix_map_elems(T, Sz+1, <<Acc/binary, Ek/binary, Ev/binary>>)
+	    end
+    end;
+prefix_map_elems([], Sz, Acc) ->
+    {false, Sz, Acc}.
+
+
 encode_list(L, Legacy) ->
     encode_list_elems(L, <<?list>>, Legacy).
 
@@ -277,11 +327,11 @@ prefix_list(L) ->
 
 encode_map(M, Legacy) ->
     Sz = map_size(M),
-    maps:fold(
-      fun(K,V,Acc) ->
-              <<Acc/binary, (encode(K, Legacy))/binary,
+    lists:foldl(
+      fun({K,V},Acc) ->
+              <<Acc/binary, (encode(K, map_key))/binary,
                 (encode(V, Legacy))/binary>>
-      end, <<?list, 1:8, Sz:32>>, M).
+      end, <<?list, 1:8, Sz:32>>, lists:sort(maps:to_list(M))).
 
 
 encode_binary(B)    ->
@@ -329,8 +379,8 @@ encode_number(N) ->
 
 encode_number(N, Legacy) when is_integer(N) ->
     encode_int(N, none, Legacy);
-encode_number(F, _Legacy) when is_float(F) ->
-    encode_float(F).
+encode_number(F, Legacy) when is_float(F) ->
+    encode_float(F, Legacy).
 
 %%
 %% IEEE 764 Binary 64 standard representation
@@ -346,7 +396,7 @@ encode_number(F, _Legacy) when is_float(F) ->
 %% We perform the following operations:
 %% - if E < 1023 (see Exponent bias), the integer part is 0
 %%
-encode_float(F) ->
+encode_float(F, Legacy) ->
     <<Sign:1, Exp0:11, Frac:52>> = <<F/float>>,
     ?dbg("F = ~p | Exp0 = ~p | Frac = ~p~n", [cF, Exp0, Frac]),
     {Int0, Fraction} =
@@ -376,17 +426,12 @@ encode_float(F) ->
             Int = if Int0 >= 0 -> -Int0;
                      true -> Int0
                   end,
-            encode_neg_int(Int, Fraction);
+            encode_neg_int(Int, Fraction, Legacy);
        Sign == 0 ->
-            encode_int(Int0, Fraction)
+            encode_int(Int0, Fraction, Legacy)
     end.
 
-encode_neg_int(Int, Fraction)->
-    encode_neg_int(Int, Fraction,false).
-encode_int(I, R) ->
-    encode_int(I, R, false).
-
-encode_int(I,R, _Legacy) when I >= 0, I =< 16#7fffffff ->
+encode_int(I,R, Legacy) when I >= 0, I =< 16#7fffffff ->
     ?dbg("encode_int(~p, ~p)~n", [I,R]),
     if R == none ->
             << ?pos4, I:31, 0:1 >>;
@@ -395,10 +440,19 @@ encode_int(I,R, _Legacy) when I >= 0, I =< 16#7fffffff ->
             <<Fraction:RSz>> = R,
             ?dbg("Fraction = ~p~n", [Fraction]),
             if Fraction == 0 ->
-                    << ?pos4, I:31, 1:1, 8:8 >>;
+		    if Legacy == map_key ->
+			    %% in map keys, floats sort higher than ints
+			    << ?atom, ?mk_pos, I:31, 1:1, 8:8 >>;
+		       true ->
+			    << ?pos4, I:31, 1:1, 8:8 >>
+		    end;
                true ->
                     Rbits = encode_bits_elems(R),
-                    << ?pos4, I:31, 1:1, Rbits/binary >>
+		    if Legacy == map_key ->
+			    << ?atom, ?mk_pos, I:31, 1:1, Rbits/binary >>;
+		       true ->
+			    << ?pos4, I:31, 1:1, Rbits/binary >>
+		    end
                end
     end;
 encode_int(I,R, Legacy) when I > 16#7fffffff ->
@@ -411,16 +465,24 @@ encode_int(I,R, Legacy) when I > 16#7fffffff ->
             <<Fraction:RSz>> = R,
             ?dbg("Fraction = ~p~n", [Fraction]),
             if Fraction == 0 ->
-                    << ?posbig, Bytes/binary, 1:8, 8:8 >>;
+		    if Legacy == map_key ->
+			    << ?atom, ?mk_posbig, Bytes/binary, 1:8, 8:8 >>;
+		       true ->
+			    << ?posbig, Bytes/binary, 1:8, 8:8 >>
+		    end;
                true ->
                     Rbits = encode_bits_elems(R),
-                    <<?posbig, Bytes/binary, 1:8, Rbits/binary>>
+		    if Legacy == map_key ->
+			    << ?atom, ?mk_posbig, Bytes/binary, 1:8, Rbits/binary >>;
+		       true ->
+			    <<?posbig, Bytes/binary, 1:8, Rbits/binary>>
+		    end
             end
     end;
 encode_int(I, R,  Legacy) when I < 0 ->
     encode_neg_int(I, R,Legacy).
 
-encode_neg_int(I,R,_Legacy) when I =< 0, I >= -16#7fffffff ->
+encode_neg_int(I,R,Legacy) when I =< 0, I >= -16#7fffffff ->
     ?dbg("encode_neg_int(~p, ~p [sz: ~p])~n", [I,pp(R), try bit_size(R) catch error:_ -> "***" end]),
     Adj = max_value(31) + I,    % keep in mind that I < 0
     ?dbg("Adj = ~p~n", [erlang:integer_to_list(Adj,2)]),
@@ -429,7 +491,11 @@ encode_neg_int(I,R,_Legacy) when I =< 0, I >= -16#7fffffff ->
        true ->
             Rbits = encode_neg_bits(R),
             ?dbg("R = ~p -> RBits = ~p~n", [pp(R), pp(Rbits)]),
-            << ?neg4, Adj:31, 0:1, Rbits/binary >>
+	    if Legacy == map_key ->
+		    <<?atom, ?mk_neg, Adj:31, 0:1, Rbits/binary>>;
+	       true ->
+		    <<?neg4, Adj:31, 0:1, Rbits/binary>>
+	    end
     end;
 encode_neg_int(I,R,Legacy) when I < -16#7fFFffFF ->
     ?dbg("encode_neg_int(BIG ~p)~n", [I]),
@@ -440,17 +506,21 @@ encode_neg_int(I,R,Legacy) when I < -16#7fFFffFF ->
        true ->
             Rbits = encode_neg_bits(R),
             ?dbg("R = ~p -> RBits = ~p~n", [pp(R), pp(Rbits)]),
-            <<?negbig, Bytes/binary, 0, Rbits/binary>>
+	    if Legacy == map_key ->
+		    <<?atom, ?mk_negbig, Bytes/binary, 0, Rbits/binary>>;
+	       true ->
+		    <<?negbig, Bytes/binary, 0, Rbits/binary>>
+	    end
     end.
 
 encode_big(I, Legacy) ->
     Bl = encode_big1(I),
     ?dbg("Bl = ~p~n", [Bl]),
     Bb = case Legacy of
-             false ->
-                 prepend_size(list_to_binary(Bl));
              true ->
-                 list_to_binary(Bl)
+                 list_to_binary(Bl);
+             _ ->
+                 prepend_size(list_to_binary(Bl))
          end,
     ?dbg("Bb = ~p~n", [Bb]),
     encode_bin_elems(Bb).
@@ -655,14 +725,19 @@ pad_bytes(Bits, Acc) when is_bitstring(Bits) ->
 %% This function will raise an exception if the beginning of `Bin' is not
 %% a valid sext-encoded term.
 %% @end
+
+%% tweaks to support map keys (which sorts ints/floats differently)
+decode_next(<<?atom,?mk_negbig, Rest/binary>>) -> decode_neg_big(Rest);
+decode_next(<<?atom,?mk_neg, I:31, F:1, Rest/binary>>) -> decode_neg(I,F,Rest);
+decode_next(<<?atom,?mk_pos, I:31, F:1, Rest/binary>>) -> decode_pos(I,F,Rest);
+decode_next(<<?atom,?mk_posbig, Rest/binary>>) -> decode_pos_big(Rest);
+%% end map key tweaks
 decode_next(<<?atom,Rest/binary>>) -> decode_atom(Rest);
 decode_next(<<?pid, Rest/binary>>) -> decode_pid(Rest);
 decode_next(<<?port, Rest/binary>>) -> decode_port(Rest);
 decode_next(<<?reference,Rest/binary>>) -> decode_ref(Rest);
 decode_next(<<?tuple,Sz:32, Rest/binary>>) -> decode_tuple(Sz,Rest);
-%% decode_next(<<?nil, Rest/binary>>) -> {[], Rest};
-%% decode_next(<<?old_list, Rest/binary>>) -> decode_list(Rest);
-decode_next(<<?list, 1, Rest/binary>>) -> decode_map(Rest);
+decode_next(<<?list, 1, Rest/binary>>) -> decode_map(Rest);  % map type tweak
 decode_next(<<?list, Rest/binary>>) -> decode_list(Rest);
 decode_next(<<?negbig, Rest/binary>>) -> decode_neg_big(Rest);
 decode_next(<<?posbig, Rest/binary>>) -> decode_pos_big(Rest);
@@ -699,6 +774,8 @@ decode_next(<<?binary, Rest/binary>>) -> decode_binary(Rest).
 %% @end
 partial_decode(<<?tuple, Sz:32, Rest/binary>>) ->
     partial_decode_tuple(Sz, Rest);
+partial_decode(<<?list, 1, Sz:32, Rest/binary>>) ->
+    partial_decode_map(Sz, Rest);
 partial_decode(<<?list, Rest/binary>>) ->
     partial_decode_list(Rest);
 partial_decode(Other) ->
@@ -735,6 +812,24 @@ partial_decode_tuple(N, Elems, Acc) ->
                         lists:reverse([Term|Acc]) ++ pad_(N-1)), Rest};
         {full, Dec, Rest} ->
             partial_decode_tuple(N-1, Rest, [Dec|Acc])
+    end.
+
+partial_decode_map(Sz, Bin) ->
+    partial_decode_map(Sz, Bin, #{}).
+
+partial_decode_map(0, Rest, Map) ->
+    {full, Map, Rest};
+partial_decode_map(N, Bin, Acc) ->
+    case partial_decode(Bin) of
+	{full, K, Rest} ->
+	    case partial_decode(Rest) of
+		{full, V, Rest1} ->
+		    partial_decode_map(N-1, Rest1, Acc#{K => V});
+		{partial, V, Rest1} ->
+		    {partial, Acc#{K => V}, Rest1}
+	    end;
+	{partial, _, _Rest} ->
+	    erlang:error(badarg)
     end.
 
 pad_(0) ->
