@@ -67,6 +67,8 @@ sext_test_() ->
       , fun() -> t(run(N, prop_sort_hex, fun prop_sort_hex/0)) end
       , fun() -> t(run(N, prop_is_prefix_hex1, fun prop_is_prefix_hex1/0)) end
       , fun() -> t(run(N, prop_is_prefix_hex2, fun prop_is_prefix_hex2/0)) end
+      , fun() -> t(run(N, prop_is_prefix_sb32_1, fun prop_is_prefix_sb32_1/0)) end
+      , fun() -> t(run(N, prop_is_prefix_sb32_2, fun prop_is_prefix_sb32_2/0)) end
       , fun() -> t(run(N,prop_non_proper_sorts,fun prop_non_proper_sorts/0)) end
      ]}.
 
@@ -316,6 +318,25 @@ prop_is_prefix_hex2() ->
                      true = is_prefix(Pfx2, Pfx1)
                  end)).
 
+prop_is_prefix_sb32_1() ->
+    ?FORALL({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
+                              positions(Tp) > 0),wild()},
+            ?LET(P, choose(1, positions(T)),
+                 begin
+                     Pfx = sext:prefix_sb32(make_wild(T,P,W)),
+                     true = is_prefix(Pfx, sext:encode_sb32(T))
+                 end)).
+
+prop_is_prefix_sb32_2() ->
+    ?FORALL({T,W}, {?SUCHTHAT(Tp, prefixable_term(),
+                              positions(Tp) > 2), wild()},
+            ?LET(P, choose(2, positions(T)),
+                 begin
+                     {Pfx1,Pfx2} = {sext:prefix_sb32(make_wild(T,P,W)),
+                                    sext:prefix_sb32(make_wild(T,P-1,W))},
+                     true = is_prefix(Pfx2, Pfx1)
+                 end)).
+
 prop_non_proper_sorts() ->
     ?FORALL({L,T}, {non_empty_list(), simple_term()},
             begin
@@ -389,6 +410,9 @@ prop_measure_term() ->
 simple_term() ->
     oneof(simple_types()).
 
+mapkey_term() ->
+    oneof([ int(), big(), pos_float(), neg_float(), anatom(), simple_term() ]).
+
 term_() ->
     ?SIZED(Size,term(Size)).
 
@@ -403,6 +427,8 @@ term(Size) ->
                  alist(Size),
                  non_proper_list(Size),
                  atuple(Size),
+                 amap(Size),
+                 abigmap(Size),
                  astring(Size)])).
 
 simple_types() ->
@@ -435,6 +461,9 @@ alist() ->
 alist(Size) ->
     list(Size,term(Size div 3)).
 
+kvlist(Size) ->
+    ?LET({K,V}, {mapkey_term(), simple_term()}, list(Size, {K, V})).
+
 non_proper_list(Size) ->
     ?LET(L,alist(Size),make_non_proper(L)).
 
@@ -444,8 +473,15 @@ list(Size,G) ->
 atuple(Size) ->
     ?LET(L, alist(Size), list_to_tuple(L)).
 
+amap(Size) ->
+    ?LET(L, kvlist(Size), maps:from_list(L)).
+
+abigmap(Size) ->
+    %% current upper limit for small maps is 32 elems
+    amap(32*Size).
+
 anatom() ->
-    oneof([a,b,c,aa,bb,cc]).
+    oneof(['',a,b,c,aa,bb,cc,'¤%#¤']).
 
 astring(0) -> "";
 astring(Size) ->
