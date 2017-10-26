@@ -1105,16 +1105,17 @@ get_max(_, W, Max) ->
 to_sb32(Bits) when is_bitstring(Bits) ->
     Sz = bit_size(Bits),
     {Chunk, Rest, Pad} =
-        case Sz rem 5 of
+        case R = Sz rem 5 of
             0 -> {Bits, <<>>, <<>>};
-            R -> sb32_encode_chunks(Sz, R, Bits)
+            _ -> sb32_encode_chunks(Sz, R, Bits)
         end,
     Enc = << << (c2sb32(C1)) >> ||
               <<C1:5>> <= Chunk >>,
     if Rest == << >> ->
             Enc;
        true ->
-            << Enc/bitstring, (c2sb32(Rest)):8, Pad/binary >>
+	    Rest1 = Rest bsl (5-R),
+            << Enc/bitstring, (c2sb32(Rest1)):8, Pad/binary >>
     end.
 
 sb32_encode_chunks(Sz, Rem, Bits) ->
@@ -1123,10 +1124,15 @@ sb32_encode_chunks(Sz, Rem, Bits) ->
     Pad = encode_pad(Rem),
     {C, Rest, Pad}.
 
-encode_pad(3) -> <<"------">>;
-encode_pad(1) -> <<"----">>;
-encode_pad(4) -> <<"---">>;
-encode_pad(2) -> <<"-">>.
+%% encode_pad(3) -> <<"------">>;
+%% encode_pad(1) -> <<"----">>;
+%% encode_pad(4) -> <<"---">>;
+%% encode_pad(2) -> <<"-">>.
+
+encode_pad(1) -> <<"-">>;
+encode_pad(2) -> <<"--">>;
+encode_pad(3) -> <<"---">>;
+encode_pad(4) -> <<"----">>.
 
 %% @spec from_sb32(Bits::bitstring()) -> bitstring()
 %% @doc Converts from an sb32-encoded bitstring into a 'normal' bitstring
@@ -1134,10 +1140,14 @@ encode_pad(2) -> <<"-">>.
 %% This function is the reverse of {@link to_sb32/1}.
 %% @end
 %%
-from_sb32(<< C:8, "------" >>) -> << (sb322c(C)):3 >>;
-from_sb32(<< C:8, "----" >>  ) -> << (sb322c(C)):1 >>;
-from_sb32(<< C:8, "---" >>   ) -> << (sb322c(C)):4 >>;
-from_sb32(<< C:8, "-" >>     ) -> << (sb322c(C)):2 >>;
+%% from_sb32(<< C:8, "------" >>) -> << (sb322c(C)):3 >>;
+%% from_sb32(<< C:8, "----" >>  ) -> << (sb322c(C)):1 >>;
+%% from_sb32(<< C:8, "---" >>   ) -> << (sb322c(C)):4 >>;
+%% from_sb32(<< C:8, "-" >>     ) -> << (sb322c(C)):2 >>;
+from_sb32(<< C:8, "----" >>     ) -> << (sb322c(C) bsr 1):4 >>;
+from_sb32(<< C:8, "---" >>      ) -> << (sb322c(C) bsr 2):3 >>;
+from_sb32(<< C:8, "--" >>       ) -> << (sb322c(C) bsr 3):2 >>;
+from_sb32(<< C:8, "-" >>        ) -> << (sb322c(C) bsr 4):1 >>;
 from_sb32(<< C:8, Rest/bitstring >>) ->
     << (sb322c(C)):5, (from_sb32(Rest))/bitstring >>;
 from_sb32(<< >>) ->
