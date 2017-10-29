@@ -30,7 +30,7 @@
 -export([to_sb32/1, from_sb32/1]).
 -export([to_hex/1, from_hex/1]).
 
--export([pp/1]).  % for debugging only
+-export([pp/1, pp/2]).  % for debugging only
 
 %% The following sub-codes are used when encoding map keys.
 %% Map keys depart from the standard Erlang term sort order, in that floats are
@@ -180,16 +180,18 @@ prefix(X) ->
     {_, P} = enc_prefix(X),
     P.
 
-enc_prefix(X) when is_tuple(X)     -> prefix_tuple(X);
-enc_prefix(X) when is_map(X)       -> prefix_map(X);
-enc_prefix(X) when is_list(X)      -> prefix_list(X);
-enc_prefix(X) when is_pid(X)       -> {false, encode_pid(X)};
-enc_prefix(X) when is_port(X)      -> {false, encode_port(X)};
-enc_prefix(X) when is_reference(X) -> {false, encode_ref(X)};
-enc_prefix(X) when is_number(X)    -> {false, encode_number(X)};
-enc_prefix(X) when is_binary(X)    -> prefix_binary(X);
-enc_prefix(X) when is_bitstring(X) -> prefix_bitstring(X);
-enc_prefix(X) when is_atom(X) ->
+enc_prefix(X) -> enc_prefix(X, false).
+
+enc_prefix(X, L) when is_tuple(X)     -> prefix_tuple(X, L);
+enc_prefix(X, L) when is_map(X)       -> prefix_map(X, L);
+enc_prefix(X, L) when is_list(X)      -> prefix_list(X, L);
+enc_prefix(X, _) when is_pid(X)       -> {false, encode_pid(X)};
+enc_prefix(X, _) when is_port(X)      -> {false, encode_port(X)};
+enc_prefix(X, _) when is_reference(X) -> {false, encode_ref(X)};
+enc_prefix(X, L) when is_number(X)    -> {false, encode_number(X, L)};
+enc_prefix(X, _) when is_binary(X)    -> prefix_binary(X);
+enc_prefix(X, _) when is_bitstring(X) -> prefix_bitstring(X);
+enc_prefix(X, _) when is_atom(X) ->
     case is_wild(X) of
         true ->
             {true, <<>>};
@@ -197,10 +199,8 @@ enc_prefix(X) when is_atom(X) ->
             {false, encode_atom(X)}
     end.
 
-enc_key_prefix(X) when is_integer(X) -> {false, encode_number(X, map_key)};
-enc_key_prefix(X) when is_float(X)   -> {false, encode_number(X, map_key)};
-enc_key_prefix(X) -> 
-    enc_prefix(X).
+enc_key_prefix(X) ->
+    enc_prefix(X, map_key).
 
 %% @spec prefix_sb32(X::term()) -> binary()
 %% @doc Generates an sb32-encoded binary for prefix matching.
@@ -254,23 +254,36 @@ decode_sb32(Data) ->
 decode_hex(Data) ->
     decode(from_hex(Data)).
 
-pp(none) -> "<none>";
-pp(B) when is_bitstring(B) ->
-    intersperse([ $0 + I || <<I:1>> <= B ]).
+pp(B) -> pp(B, 8).
 
-intersperse([_,_,_,_,_,_,_,_] = L) ->
-    L;
-intersperse([A,B,C,D,E,F,G,H|T]) ->
-    [A,B,C,D,E,F,G,H,$. | intersperse(T)].
+pp(none, _) -> "<none>";
+pp(B, C) when is_bitstring(B) ->
+    intersperse([ $0 + I || <<I:1>> <= B ], C).
+
+intersperse(L, C) ->
+    case length(L) of
+	Ln when Ln =< C -> L;
+	_ ->
+	    {L1, L2} = split_at(C, L),
+	    L1 ++ "." ++ intersperse(L2, C)
+    end.
+
+split_at(P, L) ->
+    split_at(P, L, []).
+
+split_at(P, [H|T], Acc) when P > 0 ->
+    split_at(P-1, T, [H|Acc]);
+split_at(_, A, B) ->
+    {lists:reverse(B), A}.
 
 encode_tuple(T, Legacy) ->
     Sz = size(T),
     encode_tuple_elems(1, Sz, T, <<?tuple, Sz:32>>, Legacy).
 
-prefix_tuple(T) ->
+prefix_tuple(T, L) ->
     Sz = size(T),
     Elems = tuple_to_list(T),
-    prefix_tuple_elems(Elems, <<?tuple, Sz:32>>).
+    prefix_tuple_elems(Elems, L, <<?tuple, Sz:32>>).
 
 %% It's easier to iterate over a tuple by converting it to a list, but
 %% since the tuple /can/ be huge, let's do it this way.
@@ -280,50 +293,51 @@ encode_tuple_elems(P, Sz, T, Acc, Legacy) when P =< Sz ->
 encode_tuple_elems(_, _, _, Acc, _) ->
     Acc.
 
-prefix_tuple_elems([A|T], Acc) when is_atom(A) ->
+prefix_tuple_elems([A|T], L, Acc) when is_atom(A) ->
     case is_wild(A) of
         true ->
             {true, Acc};
         false ->
-            E = encode(A),
-            prefix_tuple_elems(T, <<Acc/binary, E/binary>>)
+            E = encode(A, L),
+            prefix_tuple_elems(T, L, <<Acc/binary, E/binary>>)
     end;
-prefix_tuple_elems([H|T], Acc) ->
-    case enc_prefix(H) of
+prefix_tuple_elems([H|T], L, Acc) ->
+    case enc_prefix(H, L) of
         {true, P} ->
             {true, <<Acc/binary, P/binary>>};
         {false, E} ->
-            prefix_tuple_elems(T, <<Acc/binary, E/binary>>)
+            prefix_tuple_elems(T, L, <<Acc/binary, E/binary>>)
     end;
-prefix_tuple_elems([], Acc) ->
+prefix_tuple_elems([], _L, Acc) ->
     {false, Acc}.
 
-prefix_map(M) ->
-    Elems = lists:sort(maps:to_list(M)),
-    {Res, Sz, Enc} = prefix_map_elems(Elems, 0, <<>>),
+prefix_map(M, L) ->
+    Elems = map_to_list(M),
+    {Res, Sz, Enc} = prefix_map_elems(Elems, L, 0, <<>>),
     {Res, <<?list, 1:8, Sz:32, Enc/binary>>}.
 
-prefix_map_elems([{K, V}|T], Sz, Acc) ->
+prefix_map_elems([{K, V}|T], L, Sz, Acc) ->
     case enc_key_prefix(K) of
 	{true, _} ->
 	    erlang:error(badarg);
 	{false, Ek} ->
-	    case enc_prefix(V) of
+	    case enc_prefix(V, L) of
 		{true, Pv} ->
 		    {true, Sz+1, <<Acc/binary, Ek/binary, Pv/binary>>};
 		{false, Ev} ->
-		    prefix_map_elems(T, Sz+1, <<Acc/binary, Ek/binary, Ev/binary>>)
+		    prefix_map_elems(T, L, Sz+1,
+				     <<Acc/binary, Ek/binary, Ev/binary>>)
 	    end
     end;
-prefix_map_elems([], Sz, Acc) ->
+prefix_map_elems([], _, Sz, Acc) ->
     {false, Sz, Acc}.
 
 
 encode_list(L, Legacy) ->
     encode_list_elems(L, <<?list>>, Legacy).
 
-prefix_list(L) ->
-    prefix_list_elems(L, <<?list>>).
+prefix_list(L, Legacy) ->
+    prefix_list_elems(L, Legacy, <<?list>>).
 
 encode_map(M, Legacy) ->
     Sz = map_size(M),
@@ -331,8 +345,13 @@ encode_map(M, Legacy) ->
       fun({K,V},Acc) ->
               <<Acc/binary, (encode(K, map_key))/binary,
                 (encode(V, Legacy))/binary>>
-      end, <<?list, 1:8, Sz:32>>, lists:sort(maps:to_list(M))).
+      end, <<?list, 1:8, Sz:32>>, map_to_list(M)).
 
+map_to_list(M) ->
+    lists:sort(fun comp_map_keys/2, maps:to_list(M)).
+
+comp_map_keys(A, B) ->
+    #{A => 1} =< #{B => 1}.
 
 encode_binary(B)    ->
     Enc = encode_bin_elems(B),
@@ -373,9 +392,6 @@ encode_atom(A) ->
     Bin = list_to_binary(atom_to_list(A)),
     Enc = encode_bin_elems(Bin),
     <<?atom, Enc/binary>>.
-
-encode_number(N) ->
-    encode_number(N, false).
 
 encode_number(N, Legacy) when is_integer(N) ->
     encode_int(N, none, Legacy);
@@ -612,9 +628,9 @@ encode_list_elems([H|T], Acc, Legacy) ->
     Enc = encode(H,Legacy),
     encode_list_elems(T, <<Acc/binary, Enc/binary>>, Legacy).
 
-prefix_list_elems([], Acc) ->
+prefix_list_elems([], _, Acc) ->
     {false, <<Acc/binary, 2>>};
-prefix_list_elems(E, Acc) when not(is_list(E)) ->
+prefix_list_elems(E, L, Acc) when not(is_list(E)) ->
     case is_wild(E) of
         true ->
             {true, Acc};
@@ -622,15 +638,15 @@ prefix_list_elems(E, Acc) when not(is_list(E)) ->
             Marker = if is_bitstring(E) -> ?bin_tail;
                         true -> 1
                      end,
-            {Bool, P} = enc_prefix(E),
+            {Bool, P} = enc_prefix(E, L),
             {Bool, <<Acc/binary, Marker, P/binary>>}
     end;
-prefix_list_elems([H|T], Acc) ->
-    case enc_prefix(H) of
+prefix_list_elems([H|T], L, Acc) ->
+    case enc_prefix(H, L) of
         {true, P} ->
             {true, <<Acc/binary, P/binary>>};
         {false, E} ->
-            prefix_list_elems(T, <<Acc/binary, E/binary>>)
+            prefix_list_elems(T, L, <<Acc/binary, E/binary>>)
     end.
 
 is_wild('_') ->
