@@ -389,6 +389,9 @@ prop_measure_term() ->
 simple_term() ->
     oneof(simple_types()).
 
+mapkey_term() ->
+    oneof([ int(), big(), pos_float(), neg_float(), anatom(), simple_term() ]).
+
 term_() ->
     ?SIZED(Size,term(Size)).
 
@@ -403,6 +406,8 @@ term(Size) ->
                  alist(Size),
                  non_proper_list(Size),
                  atuple(Size),
+                 amap(Size),
+                 abigmap(Size),
                  astring(Size)])).
 
 simple_types() ->
@@ -435,6 +440,9 @@ alist() ->
 alist(Size) ->
     list(Size,term(Size div 3)).
 
+kvlist(Size) ->
+    ?LET({K,V}, {mapkey_term(), simple_term()}, list(Size, {K, V})).
+
 non_proper_list(Size) ->
     ?LET(L,alist(Size),make_non_proper(L)).
 
@@ -444,8 +452,15 @@ list(Size,G) ->
 atuple(Size) ->
     ?LET(L, alist(Size), list_to_tuple(L)).
 
+amap(Size) ->
+    ?LET(L, kvlist(Size), maps:from_list(L)).
+
+abigmap(Size) ->
+    %% current upper limit for small maps is 32 elems
+    amap(32*Size).
+
 anatom() ->
-    oneof([a,b,c,aa,bb,cc]).
+    oneof(['',a,b,c,aa,bb,cc,'¤%#¤']).
 
 astring(0) -> "";
 astring(Size) ->
