@@ -30,8 +30,12 @@
 -export([to_sb32/1, from_sb32/1]).
 -export([to_hex/1, from_hex/1]).
 
+-export([reverse_sext/1]).
+
 -export([pp/1]).  % for debugging only
 
+-define(rev_sext , 4).
+%%
 -define(negbig   , 8).
 -define(neg4     , 9).
 -define(pos4     , 10).
@@ -99,6 +103,17 @@ encode(X, Legacy) when is_number(X) -> encode_number(X, Legacy);
 encode(X, _) when is_binary(X)      -> encode_binary(X);
 encode(X, _) when is_bitstring(X)   -> encode_bitstring(X);
 encode(X, _) when is_atom(X)        -> encode_atom(X).
+
+%% @spec reverse_sext(binary()) -> binary()
+%% @doc Reverses the sorting properties of a sext-encoded term. Reverted
+%% objects compare as smaller than all sext-encoded objects.
+%%
+%% No hex- or sb32-encoded variants are provided. Use the `to_hex/1' or
+%% `to_sb32/1' functions instead.
+%% @end
+reverse_sext(<<X:8, _/binary>> = B) when ?is_sext(X) ->
+    NegB = encode_neg_bits(B),
+    <<?rev_sext, NegB/binary>>.
 
 %% @spec encode_sb32(Term::any()) -> binary()
 %% @doc Encodes any Erlang term into an sb32-encoded binary.
@@ -212,6 +227,11 @@ chop_prefix_tail(Bin) ->
 
 %% @spec decode(B::binary()) -> term()
 %% @doc Decodes a binary generated using the function {@link sext:encode/1}.
+%%
+%% Note that a reverse-encoded binary (using {@link sext:reverse_sext/1})
+%% decodes into the original sext-encoded binary, not into the term itself.
+%% In other words, if `R = reverse_sext(encode(T))',
+%% then `T = decode(decode(R))'.
 %% @end
 %%
 decode(Elems) ->
@@ -655,6 +675,7 @@ pad_bytes(Bits, Acc) when is_bitstring(Bits) ->
 %% This function will raise an exception if the beginning of `Bin' is not
 %% a valid sext-encoded term.
 %% @end
+decode_next(<<?rev_sext,Rest/binary>>) -> decode_rev_sext(Rest);
 decode_next(<<?atom,Rest/binary>>) -> decode_atom(Rest);
 decode_next(<<?pid, Rest/binary>>) -> decode_pid(Rest);
 decode_next(<<?port, Rest/binary>>) -> decode_port(Rest);
@@ -709,6 +730,9 @@ partial_decode(Other) ->
         error:function_clause ->
             {partial, '_', Other}
     end.
+
+decode_rev_sext(B) ->
+    decode_neg_binary(B).
 
 decode_atom(B) ->
     {Bin, Rest} = decode_binary(B),

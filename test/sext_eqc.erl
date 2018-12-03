@@ -47,12 +47,15 @@ sext_test_() ->
     {timeout, 60,
      [
       fun() -> t(run(N, prop_encode, fun prop_encode/0)) end
+      , fun() -> t(run(N, prop_encode_rev, fun prop_encode_rev/0)) end
       , fun() -> t(run(N, prop_decode_legacy_big, fun prop_decode_legacy_big/0)) end
       , fun() -> t(run(N, prop_decode_legacy_neg_big, fun prop_decode_legacy_neg_big/0)) end
       , fun() -> t(run(N, prop_prefix_equiv,fun prop_prefix_equiv/0))end
       , fun() -> t(run(N, prop_sort, fun prop_sort/0)) end
+      , fun() -> t(run(N, prop_revsort, fun prop_revsort/0)) end
       , fun() -> t(run(N, prop_sort_big, fun prop_sort_big/0)) end
       , fun() -> t(run(N, prop_sort_neg_big, fun prop_sort_neg_big/0)) end
+      , fun() -> t(run(N, prop_revsort_neg_big, fun prop_revsort_neg_big/0)) end
       , fun() -> t(run(N, prop_encode_sb32, fun prop_encode_sb32/0)) end
       , fun() -> t(run(N, prop_sort_sb32, fun prop_sort_sb32/0)) end
       , fun() -> t(run(N, prop_partial_decode1, fun prop_partial_decode1/0)) end
@@ -123,6 +126,15 @@ prop_sort() ->
                         comp(X1,X2) == comp_i(T1,T2))
             end).
 
+prop_revsort() ->
+    ?FORALL({T1,T2}, {term_(), term_()},
+            begin
+                {X1,X2} = {sext:reverse_sext(sext:encode(T1)),
+                           sext:reverse_sext(sext:encode(T2))},
+                collect(size(term_to_binary({T1,T2})),
+                        comp(X1,X2) == comp_i(T2,T1))
+            end).
+
 prop_sort_big() ->
     ?FORALL({T1,T2}, {big(), big()},
             begin
@@ -137,6 +149,15 @@ prop_sort_neg_big() ->
                 {X1,X2} = {sext:encode(T1), sext:encode(T2)},
                 collect(size(term_to_binary({T1,T2})),
                         comp(X1,X2) == comp_i(T1,T2))
+            end).
+
+prop_revsort_neg_big() ->
+    ?FORALL({T1,T2}, {neg_big(), neg_big()},
+            begin
+                {X1,X2} = {sext:reverse_sext(sext:encode(T1)),
+                           sext:reverse_sext(sext:encode(T2))},
+                collect(size(term_to_binary({T1,T2})),
+                        comp(X1,X2) == comp_i(T2,T1))
             end).
 
 prop_sort_sb32() ->
@@ -173,6 +194,11 @@ prop_sort_neg_fs() ->
 prop_encode() ->
     ?FORALL(T, term_(),
             sext:decode(sext:encode(T)) == T).
+
+prop_encode_rev() ->
+    ?FORALL(T, term_(),
+            sext:decode(sext:decode(
+                          sext:reverse_sext(sext:encode(T)))) == T).
 
 prop_decode_legacy_big() ->
     ?FORALL(T, big(),
