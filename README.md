@@ -1,5 +1,7 @@
 # The sext application #
 
+[<img src="http://quickcheck-ci.com/p/uwiger/sext.png" alt="Build Status" width="160px">](http://quickcheck-ci.com/p/uwiger/sext)
+
 __Authors:__ Ulf Wiger ([`ulf@wiger.net`](mailto:ulf@wiger.net)).
 
 A sortable serialization library
@@ -8,7 +10,7 @@ preserves the Erlang term order.
 
 ```
 
-Copyright 2014 Ulf Wiger
+Copyright 2014-2020 Ulf Wiger
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
