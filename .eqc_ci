@@ -1,0 +1,2 @@
+{build,"mkdir -p ebin; erlc -o ebin -DEQC +\\{parse_transform,eqc_cover\\} src/*.erl test/*.erl"}.
+{test_path, "ebin"}.
