@@ -20,7 +20,7 @@
 %% @end
 -module(sext).
 
--export([encode/1, encode/2, decode/1, decode_next/1]).
+-export([encode/1, encode/2, decode/1, decode/2, decode_next/1, decode_next/2]).
 -export([encode_hex/1, decode_hex/1]).
 -export([encode_sb32/1, decode_sb32/1]).
 -export([prefix/1,
@@ -33,6 +33,12 @@
 -export([reverse_sext/1]).
 
 -export([pp/1]).  % for debugging only
+
+-type options() :: #{legacy => boolean(),
+                     atom_encoding => latin1 | utf8} |
+                   boolean().
+%% legacy: boolean() - if true, encode using the old bignum format; default: false
+%% atom_encoding: latin1 | utf8 - encoding to use for atoms; default: latin1
 
 -define(rev_sext , 4).
 %%
@@ -79,9 +85,9 @@
 %% original terms would.
 %% @end
 %%
-encode(X) -> encode(X, false).
+encode(X) -> encode(X, #{}).
 
-%% @spec encode(T::term(), Legacy::boolean()) -> binary()
+-spec encode(T::term(), Opts::options()) -> binary().
 %% @doc Encodes an Erlang term using legacy bignum encoding.
 %% On March 4 2013, Basho noticed that encoded bignums didn't always sort
 %% properly. This bug has been fixed, but the encoding of bignums necessarily
@@ -93,16 +99,17 @@ encode(X) -> encode(X, false).
 %%
 %% Use only as transition support. This function will be deprecated in time.
 %% @end
-encode(X, Legacy) when is_tuple(X)  -> encode_tuple(X, Legacy);
-encode(X, Legacy) when is_map(X)    -> encode_map(X, Legacy);
-encode(X, Legacy) when is_list(X)   -> encode_list(X, Legacy);
+encode(X, Legacy) when is_boolean(Legacy) -> encode(X, #{legacy => Legacy});
+encode(X, Opts) when is_tuple(X)    -> encode_tuple(X, Opts);
+encode(X, Opts) when is_map(X)      -> encode_map(X, Opts);
+encode(X, Opts) when is_list(X)     -> encode_list(X, Opts);
 encode(X, _) when is_pid(X)         -> encode_pid(X);
 encode(X, _) when is_port(X)        -> encode_port(X);
 encode(X, _) when is_reference(X)   -> encode_ref(X);
-encode(X, Legacy) when is_number(X) -> encode_number(X, Legacy);
+encode(X, Opts) when is_number(X)   -> encode_number(X, Opts);
 encode(X, _) when is_binary(X)      -> encode_binary(X);
 encode(X, _) when is_bitstring(X)   -> encode_bitstring(X);
-encode(X, _) when is_atom(X)        -> encode_atom(X).
+encode(X, Opts) when is_atom(X)     -> encode_atom(X, Opts).
 
 %% @spec reverse_sext(binary()) -> binary()
 %% @doc Reverses the sorting properties of a sext-encoded term. Reverted
@@ -182,7 +189,7 @@ enc_prefix(X) when is_list(X)      -> prefix_list(X);
 enc_prefix(X) when is_pid(X)       -> {false, encode_pid(X)};
 enc_prefix(X) when is_port(X)      -> {false, encode_port(X)};
 enc_prefix(X) when is_reference(X) -> {false, encode_ref(X)};
-enc_prefix(X) when is_number(X)    -> {false, encode_number(X)};
+enc_prefix(X) when is_number(X)    -> {false, encode_number(X, #{})};
 enc_prefix(X) when is_binary(X)    -> prefix_binary(X);
 enc_prefix(X) when is_bitstring(X) -> prefix_bitstring(X);
 enc_prefix(X) when is_atom(X) ->
@@ -190,7 +197,7 @@ enc_prefix(X) when is_atom(X) ->
         true ->
             {true, <<>>};
         false ->
-            {false, encode_atom(X)}
+            {false, encode_atom(X, #{})}
     end.
 
 %% @spec prefix_sb32(X::term()) -> binary()
@@ -235,7 +242,10 @@ chop_prefix_tail(Bin) ->
 %% @end
 %%
 decode(Elems) ->
-    case decode_next(Elems) of
+  decode(Elems, #{}).
+
+decode(Elems, Opts) ->
+    case decode_next(Elems, Opts) of
         {Term, <<>>} -> Term;
         Other -> erlang:error(badarg, Other)
     end.
@@ -254,9 +264,9 @@ pp(none) -> "<none>";
 pp(B) when is_bitstring(B) ->
     [ $0 + I || <<I:1>> <= B ].
 
-encode_tuple(T, Legacy) ->
+encode_tuple(T, Opts) ->
     Sz = size(T),
-    encode_tuple_elems(1, Sz, T, <<?tuple, Sz:32>>, Legacy).
+    encode_tuple_elems(1, Sz, T, <<?tuple, Sz:32>>, Opts).
 
 prefix_tuple(T) ->
     Sz = size(T),
@@ -265,9 +275,9 @@ prefix_tuple(T) ->
 
 %% It's easier to iterate over a tuple by converting it to a list, but
 %% since the tuple /can/ be huge, let's do it this way.
-encode_tuple_elems(P, Sz, T, Acc, Legacy) when P =< Sz ->
-    E = encode(element(P,T), Legacy),
-    encode_tuple_elems(P+1, Sz, T, <<Acc/binary, E/binary>>, Legacy);
+encode_tuple_elems(P, Sz, T, Acc, Opts) when P =< Sz ->
+    E = encode(element(P,T), Opts),
+    encode_tuple_elems(P+1, Sz, T, <<Acc/binary, E/binary>>, Opts);
 encode_tuple_elems(_, _, _, Acc, _) ->
     Acc.
 
@@ -289,18 +299,18 @@ prefix_tuple_elems([H|T], Acc) ->
 prefix_tuple_elems([], Acc) ->
     {false, Acc}.
 
-encode_list(L, Legacy) ->
-    encode_list_elems(L, <<?list>>, Legacy).
+encode_list(L, Opts) ->
+    encode_list_elems(L, <<?list>>, Opts).
 
 prefix_list(L) ->
     prefix_list_elems(L, <<?list>>).
 
-encode_map(M, Legacy) ->
+encode_map(M, Opts) ->
     Sz = map_size(M),
     maps:fold(
       fun(K,V,Acc) ->
-              <<Acc/binary, (encode(K, Legacy))/binary,
-                (encode(V, Legacy))/binary>>
+              <<Acc/binary, (encode(K, Opts))/binary,
+                (encode(V, Opts))/binary>>
       end, <<?list, 1:8, Sz:32>>, M).
 
 
@@ -401,16 +411,13 @@ encode_ref(Name, Rest) ->
     RestEnc = encode_bin_elems(Rest),
     <<?reference, NameEnc/binary, RestEnc/binary>>.
 
-encode_atom(A) ->
-    Bin = list_to_binary(atom_to_list(A)),
+encode_atom(A, Opts) ->
+    Bin = atom_to_binary(A, maps:get(atom_encoding, Opts, latin1)),
     Enc = encode_bin_elems(Bin),
     <<?atom, Enc/binary>>.
 
-encode_number(N) ->
-    encode_number(N, false).
-
-encode_number(N, Legacy) when is_integer(N) ->
-    encode_int(N, none, Legacy);
+encode_number(N, Opts) when is_integer(N) ->
+    encode_int(N, none, maps:get(legacy, Opts, false));
 encode_number(F, _Legacy) when is_float(F) ->
     encode_float(F).
 
@@ -614,15 +621,15 @@ encode_big1(I, Acc) ->
 
 encode_list_elems([], Acc, _) ->
     <<Acc/binary, 2>>;
-encode_list_elems(B, Acc, Legacy) when is_bitstring(B) ->
+encode_list_elems(B, Acc, Opts) when is_bitstring(B) ->
     %% improper list
-    <<Acc/binary, ?bin_tail, (encode(B, Legacy))/binary>>;
-encode_list_elems(E, Acc, Legacy) when not(is_list(E)) ->
+    <<Acc/binary, ?bin_tail, (encode(B, Opts))/binary>>;
+encode_list_elems(E, Acc, Opts) when not(is_list(E)) ->
     %% improper list
-    <<Acc/binary, 1, (encode(E, Legacy))/binary>>;
-encode_list_elems([H|T], Acc, Legacy) ->
-    Enc = encode(H,Legacy),
-    encode_list_elems(T, <<Acc/binary, Enc/binary>>, Legacy).
+    <<Acc/binary, 1, (encode(E, Opts))/binary>>;
+encode_list_elems([H|T], Acc, Opts) ->
+    Enc = encode(H,Opts),
+    encode_list_elems(T, <<Acc/binary, Enc/binary>>, Opts).
 
 prefix_list_elems([], Acc) ->
     {false, <<Acc/binary, 2>>};
@@ -729,7 +736,10 @@ pad_bytes(Bits, Acc) when is_bitstring(Bits) ->
 %% ------------------------------------------------------
 %% Decoding routines
 
--spec decode_next(binary()) -> {any(), binary()}.
+decode_next(Elems) ->
+    decode_next(Elems, #{}).
+
+-spec decode_next(binary(), options()) -> {any(), binary()}.
 %% @spec decode_next(Bin) -> {N, Rest}
 %% @doc Decode a binary stream, returning the next decoded term and the
 %% stream remainder
@@ -737,21 +747,22 @@ pad_bytes(Bits, Acc) when is_bitstring(Bits) ->
 %% This function will raise an exception if the beginning of `Bin' is not
 %% a valid sext-encoded term.
 %% @end
-decode_next(<<?rev_sext,Rest/binary>>) -> decode_rev_sext(Rest);
-decode_next(<<?atom,Rest/binary>>) -> decode_atom(Rest);
-decode_next(<<?pid, Rest/binary>>) -> decode_pid(Rest);
-decode_next(<<?port, Rest/binary>>) -> decode_port(Rest);
-decode_next(<<?reference,Rest/binary>>) -> decode_ref(Rest);
-decode_next(<<?tuple,Sz:32, Rest/binary>>) -> decode_tuple(Sz,Rest);
+decode_next(Elems, Legacy) when is_boolean(Legacy) -> decode_next(Elems, #{legacy => Legacy});
+decode_next(<<?rev_sext,Rest/binary>>, _) -> decode_rev_sext(Rest);
+decode_next(<<?atom,Rest/binary>>, Opts) -> decode_atom(Rest, Opts);
+decode_next(<<?pid, Rest/binary>>, _) -> decode_pid(Rest);
+decode_next(<<?port, Rest/binary>>, _) -> decode_port(Rest);
+decode_next(<<?reference,Rest/binary>>, _) -> decode_ref(Rest);
+decode_next(<<?tuple,Sz:32, Rest/binary>>, Opts) -> decode_tuple(Sz,Rest,Opts);
 %% decode_next(<<?nil, Rest/binary>>) -> {[], Rest};
 %% decode_next(<<?old_list, Rest/binary>>) -> decode_list(Rest);
-decode_next(<<?list, 1, Rest/binary>>) -> decode_map(Rest);
-decode_next(<<?list, Rest/binary>>) -> decode_list(Rest);
-decode_next(<<?negbig, Rest/binary>>) -> decode_neg_big(Rest);
-decode_next(<<?posbig, Rest/binary>>) -> decode_pos_big(Rest);
-decode_next(<<?neg4, I:31, F:1, Rest/binary>>) -> decode_neg(I,F,Rest);
-decode_next(<<?pos4, I:31, F:1, Rest/binary>>) -> decode_pos(I,F,Rest);
-decode_next(<<?binary, Rest/binary>>) -> decode_binary(Rest).
+decode_next(<<?list, 1, Rest/binary>>, Opts) -> decode_map(Rest, Opts);
+decode_next(<<?list, Rest/binary>>, Opts) -> decode_list(Rest, Opts);
+decode_next(<<?negbig, Rest/binary>>, _) -> decode_neg_big(Rest);
+decode_next(<<?posbig, Rest/binary>>, _) -> decode_pos_big(Rest);
+decode_next(<<?neg4, I:31, F:1, Rest/binary>>, _) -> decode_neg(I,F,Rest);
+decode_next(<<?pos4, I:31, F:1, Rest/binary>>, _) -> decode_pos(I,F,Rest);
+decode_next(<<?binary, Rest/binary>>, _) -> decode_binary(Rest).
 
 -spec partial_decode(binary()) -> {full | partial, any(), binary()}.
 %% @spec partial_decode(Bytes) -> {full | partial, DecodedTerm, Rest}
@@ -785,7 +796,7 @@ partial_decode(<<?tuple, Sz:32, Rest/binary>>) ->
 partial_decode(<<?list, Rest/binary>>) ->
     partial_decode_list(Rest);
 partial_decode(Other) ->
-    try decode_next(Other) of
+    try decode_next(Other, #{}) of
         {Dec, Rest} ->
             {full, Dec, Rest}
     catch
@@ -796,17 +807,17 @@ partial_decode(Other) ->
 decode_rev_sext(B) ->
     decode_neg_binary(B).
 
-decode_atom(B) ->
+decode_atom(B, Opts) ->
     {Bin, Rest} = decode_binary(B),
-    {list_to_atom(binary_to_list(Bin)), Rest}.
+    {binary_to_atom(Bin, maps:get(atom_encoding, Opts, latin1)), Rest}.
 
-decode_tuple(Sz, Elems) ->
-    decode_tuple(Sz,Elems,[]).
+decode_tuple(Sz, Elems, Opts) ->
+    decode_tuple(Sz,Elems,[], Opts).
 
-decode_tuple(0, Rest, Acc) ->
+decode_tuple(0, Rest, Acc, _) ->
     {list_to_tuple(lists:reverse(Acc)), Rest};
-decode_tuple(N, Elems, Acc) ->
-    {Term, Rest} = decode_next(Elems),
+decode_tuple(N, Elems, Acc, Opts) ->
+    {Term, Rest} = decode_next(Elems, Opts),
     decode_tuple(N-1, Rest, [Term|Acc]).
 
 partial_decode_tuple(Sz, Elems) ->
@@ -837,7 +848,7 @@ partial_decode_list(<<2, Rest/binary>>, Acc) ->
     {full, lists:reverse(Acc), Rest};
 partial_decode_list(<<?bin_tail, Next/binary>>, Acc) ->
     %% improper list, binary tail
-    {Term, Rest} = decode_next(Next),
+    {Term, Rest} = decode_next(Next, #{}),
     {full, lists:reverse(Acc) ++ Term, Rest};
 partial_decode_list(<<1, Next/binary>>, Acc) ->
     {Result, Term, Rest} = partial_decode(Next),
@@ -852,33 +863,33 @@ partial_decode_list(<<X,_/binary>> = Next, Acc) when ?is_sext(X) ->
 partial_decode_list(Rest, Acc) ->
     {partial, lists:reverse(Acc) ++ '_', Rest}.
 
-decode_map(<<Sz:32, Rest/binary>>) ->
-    decode_map(Sz, Rest, #{}).
+decode_map(<<Sz:32, Rest/binary>>, Opts) ->
+    decode_map(Sz, Rest, #{}, Opts).
 
-decode_map(0, Rest, M) ->
+decode_map(0, Rest, M, _) ->
     {M, Rest};
-decode_map(N, Bin, M) ->
-    {K, Bin1} = decode_next(Bin),
-    {V, Bin2} = decode_next(Bin1),
-    decode_map(N-1, Bin2, maps:put(K, V, M)).
+decode_map(N, Bin, M, Opts) ->
+    {K, Bin1} = decode_next(Bin, Opts),
+    {V, Bin2} = decode_next(Bin1, Opts),
+    decode_map(N-1, Bin2, maps:put(K, V, M), Opts).
 
 
-decode_list(Elems) ->
-    decode_list(Elems, []).
+decode_list(Elems, Opts) ->
+    decode_list(Elems, [], Opts).
 
-decode_list(<<2, Rest/binary>>, Acc) ->
+decode_list(<<2, Rest/binary>>, Acc, _Opts) ->
     {lists:reverse(Acc), Rest};
-decode_list(<<?bin_tail, Next/binary>>, Acc) ->
+decode_list(<<?bin_tail, Next/binary>>, Acc, Opts) ->
     %% improper list, binary tail
-    {Term, Rest} = decode_next(Next),
+    {Term, Rest} = decode_next(Next, Opts),
     {lists:reverse(Acc) ++ Term, Rest};
-decode_list(<<1, Next/binary>>, Acc) ->
+decode_list(<<1, Next/binary>>, Acc, Opts) ->
     %% improper list, non-binary tail
-    {Term, Rest} = decode_next(Next),
+    {Term, Rest} = decode_next(Next, Opts),
     {lists:reverse(Acc) ++ Term, Rest};
-decode_list(Elems, Acc) ->
-    {Term, Rest} = decode_next(Elems),
-    decode_list(Rest, [Term|Acc]).
+decode_list(Elems, Acc, Opts) ->
+    {Term, Rest} = decode_next(Elems, Opts),
+    decode_list(Rest, [Term|Acc], Opts).
 
 decode_pid(Bin) ->
     {Name, Rest} = decode_binary(Bin),
