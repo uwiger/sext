@@ -1,0 +1,17 @@
+{name,"sext"}.
+{type,lib}.
+{modules,[]}.
+{prefix,none}.
+{desc,"Sortable Erlang Term Serialization"}.
+{author,"Ulf Wiger"}.
+{package_id,{"uwiger","sext",{1,8,0}}}.
+{deps,[]}.
+{key_name,none}.
+{a_email,"ulf@wiger.net"}.
+{c_email,"ulf@wiger.net"}.
+{copyright,"Ulf Wiger"}.
+{file_exts,[]}.
+{license,"Apache-2.0"}.
+{repo_url,"https://github.com/uwiger/sext"}.
+{tags,[]}.
+{ws_url,[]}.
