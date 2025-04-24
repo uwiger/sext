@@ -17,7 +17,7 @@ Barrel.nonode@nohost
 .idea
 deps
 .eunit/
-ebin
+ebin/*.beam
 *~
 */*~
 erl_crash.dump
